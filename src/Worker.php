@@ -331,6 +331,14 @@ class Worker
         return $this->memoryLimit;
     }
 
+    /**
+     * Reset the processed-jobs counter (the shared worker instance is reused per request).
+     */
+    public function resetJobsProcessed(): void
+    {
+        $this->jobsProcessed = 0;
+    }
+
     public function getJobsProcessed(): int
     {
         return $this->jobsProcessed;

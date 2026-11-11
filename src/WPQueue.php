@@ -11,6 +11,8 @@ use WPQueue\Jobs\PendingDispatch;
 use WPQueue\Loopback\LoopbackHandler;
 use WPQueue\Runtime\RuntimeMode;
 use WPQueue\Storage\LogStorage;
+use WPQueue\Support\Lock;
+use WPQueue\Support\Schema;
 
 if (! defined('ABSPATH')) {
     exit;
@@ -77,50 +79,16 @@ final class WPQueue
 
         // Register cron handler for processing queues
         add_action('wp_queue_process', static function (string $queue = 'default'): void {
-            error_log('WP Queue: Processing started for queue: '.$queue);
-
-            if (self::isProcessing($queue)) {
-                error_log('WP Queue: Processing already running for queue: '.$queue);
-
-                return;
-            }
-
-            $lockKey = 'wp_queue_lock_'.$queue;
-            $lockTtl = 120;
-
-            set_site_transient($lockKey, 1, $lockTtl);
-
-            $instance = self::getInstance();
-            $instance->worker->setMaxJobs(50);
-            $instance->worker->setMaxTime(50);
-
-            // Discover all queues from the current driver
-            $queues = $instance->manager->discoverQueues();
-
-            // Ensure default queue is always processed
-            if (! in_array($queue, $queues, true)) {
-                array_unshift($queues, $queue);
-            }
-
-            // Process each discovered queue until worker reaches its limits
-            foreach ($queues as $queueName) {
-                while (! $instance->worker->shouldStop()) {
-                    if (! $instance->worker->runNextJob($queueName)) {
-                        break;
-                    }
-                }
-            }
-
-            try {
-                error_log('WP Queue: Processing completed. Jobs processed: '.$instance->worker->getJobsProcessed());
-            } finally {
-                delete_site_transient($lockKey);
-            }
+            self::processQueues($queue, 50, 50);
         });
 
-        // Schedule queue processing
+        // Schedule queue processing (cron / loopback mode). In daemon mode an
+        // external worker (`wp queue work`) polls the queue, so stale WP-Cron
+        // events of the plugin are removed instead.
         add_action('init', static function (): void {
             if (! RuntimeMode::useCron()) {
+                self::unscheduleProcessing();
+
                 return;
             }
 
@@ -182,6 +150,7 @@ final class WPQueue
 
         self::createLogsTable();
         self::migrateLogsOption();
+        Schema::install();
     }
 
     public static function uninstall(): void
@@ -345,7 +314,73 @@ final class WPQueue
      */
     public static function isProcessing(string $queue = 'default'): bool
     {
-        return (bool) get_site_transient('wp_queue_lock_'.$queue);
+        // One worker lock for all queues: a worker drains every queue.
+        return Lock::isHeld(Lock::WORKER);
+    }
+
+    /**
+     * Process all known queues under the global worker lock.
+     *
+     * @return int|null Jobs processed, or null when another worker holds the lock.
+     */
+    public static function processQueues(string $queue = 'default', int $maxJobs = 50, int $maxTime = 50): ?int
+    {
+        $token = Lock::acquire(Lock::WORKER, $maxTime + 60);
+
+        if ($token === null) {
+            error_log('WP Queue: Processing already running, skipped for queue: '.$queue);
+
+            return null;
+        }
+
+        try {
+            $instance = self::getInstance();
+            $instance->worker->setMaxJobs($maxJobs);
+            $instance->worker->setMaxTime($maxTime);
+            $instance->worker->resetJobsProcessed();
+
+            $queues = $instance->manager->discoverQueues();
+
+            if (! in_array($queue, $queues, true)) {
+                array_unshift($queues, $queue);
+            }
+
+            foreach ($queues as $queueName) {
+                while (! $instance->worker->shouldStop()) {
+                    if (! $instance->worker->runNextJob($queueName)) {
+                        break;
+                    }
+                }
+            }
+
+            $processed = $instance->worker->getJobsProcessed();
+
+            if ($processed > 0) {
+                error_log('WP Queue: Processing completed. Jobs processed: '.$processed);
+            }
+
+            return $processed;
+        } finally {
+            Lock::release(Lock::WORKER, $token);
+        }
+    }
+
+    /**
+     * Remove every scheduled wp_queue_process event (with or without args).
+     */
+    public static function unscheduleProcessing(): void
+    {
+        if (! function_exists('_get_cron_array') || ! function_exists('wp_unschedule_hook')) {
+            return;
+        }
+
+        foreach ((array) _get_cron_array() as $hooks) {
+            if (isset($hooks['wp_queue_process'])) {
+                wp_unschedule_hook('wp_queue_process');
+
+                return;
+            }
+        }
     }
 
     /**

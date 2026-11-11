@@ -7,6 +7,7 @@ namespace WPQueue\Jobs;
 use WPQueue\Contracts\JobInterface;
 use WPQueue\Loopback\LoopbackDispatcher;
 use WPQueue\QueueManager;
+use WPQueue\Runtime\RuntimeMode;
 
 if (! defined('ABSPATH')) {
     exit;
@@ -87,6 +88,21 @@ class PendingDispatch
             return;
         }
 
+        // Daemon mode: an external worker polls the queue, WP-Cron is not used.
+        if (! RuntimeMode::useCron()) {
+            return;
+        }
+
+        if (wp_next_scheduled('wp_queue_process', [$queue]) === false) {
+            wp_schedule_single_event(time(), 'wp_queue_process', [$queue]);
+        }
+
+        // With DISABLE_WP_CRON the site runs cron from the system scheduler:
+        // spawning wp-cron.php here would execute every due hook, not only ours.
+        if (defined('DISABLE_WP_CRON') && DISABLE_WP_CRON) {
+            return;
+        }
+
         if (! self::$spawnRegistered) {
             self::$spawnRegistered = true;
 
@@ -103,10 +119,6 @@ class PendingDispatch
                     error_log('WP Queue: spawn_cron failed: '.$e->getMessage());
                 }
             });
-        }
-
-        if (wp_next_scheduled('wp_queue_process', [$queue]) === false) {
-            wp_schedule_single_event(time(), 'wp_queue_process', [$queue]);
         }
 
         self::$spawnQueued = true;

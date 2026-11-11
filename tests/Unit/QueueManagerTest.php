@@ -84,17 +84,9 @@ describe('DatabaseQueue', function (): void {
     });
 
     it('can get queue size', function (): void {
-        $job1 = new SimpleJob();
-        $job2 = new SimpleJob();
-
-        Brain\Monkey\Functions\stubs([
-            'get_site_option' => fn () => [
-                $job1->getId() => ['payload' => serialize($job1), 'available_at' => time(), 'reserved_at' => null, 'attempts' => 0],
-                $job2->getId() => ['payload' => serialize($job2), 'available_at' => time(), 'reserved_at' => null, 'attempts' => 0],
-            ],
-        ]);
-
         $queue = new DatabaseQueue();
+        $queue->push(new SimpleJob());
+        $queue->push(new SimpleJob());
 
         expect($queue->size('default'))->toBe(2);
     });

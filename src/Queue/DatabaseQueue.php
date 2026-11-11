@@ -4,23 +4,55 @@ declare(strict_types=1);
 
 namespace WPQueue\Queue;
 
+use WPQueue\Contracts\InspectableQueue;
 use WPQueue\Contracts\JobInterface;
 use WPQueue\Contracts\QueueInterface;
+use WPQueue\Support\Schema;
 
 if (! defined('ABSPATH')) {
     exit;
 }
 
-class DatabaseQueue implements QueueInterface
+/**
+ * Database driver: one row per job in {prefix}queue_jobs.
+ *
+ * A job is claimed with a conditional UPDATE (`... WHERE id = ? AND reserved_at IS NULL`),
+ * which is atomic in every SQL engine, so concurrent workers can neither take the
+ * same job twice nor lose jobs. The object cache (Redis etc.) is not involved.
+ */
+class DatabaseQueue implements InspectableQueue, QueueInterface
 {
-    protected const PREFIX = 'wp_queue_';
+    /**
+     * Seconds after which a reserved job is considered abandoned (worker crashed).
+     */
+    public const STALE_THRESHOLD = 300;
+
+    /**
+     * Candidates fetched per pop() attempt.
+     */
+    protected const CLAIM_BATCH = 10;
+
+    protected string $workerId;
+
+    public function __construct()
+    {
+        $this->workerId = bin2hex(random_bytes(8));
+    }
 
     public function push(JobInterface $job): string
     {
-        $queue = $job->getQueue();
-        $availableAt = time() + $job->getDelay();
+        global $wpdb;
 
-        $this->store($queue, $job, $availableAt);
+        Schema::ensure();
+
+        $wpdb->insert(Schema::jobsTable(), [
+            'job_id' => $job->getId(),
+            'queue' => $job->getQueue() ?: 'default',
+            'payload' => $this->encode($job),
+            'attempts' => $job->getAttempts(),
+            'available_at' => time() + $job->getDelay(),
+            'created_at' => time(),
+        ], ['%s', '%s', '%s', '%d', '%d', '%d']);
 
         return $job->getId();
     }
@@ -34,93 +66,109 @@ class DatabaseQueue implements QueueInterface
 
     public function pop(string $queue = 'default'): ?JobInterface
     {
-        $jobs = $this->getQueue($queue);
+        global $wpdb;
 
-        if (empty($jobs)) {
-            return null;
-        }
+        Schema::ensure();
 
+        $table = Schema::jobsTable();
         $now = time();
-        $staleThreshold = 300;
+        $staleBefore = $now - self::STALE_THRESHOLD;
 
-        foreach ($jobs as $id => $data) {
-            $isStale = $data['reserved_at'] !== null && ($now - $data['reserved_at']) > $staleThreshold;
+        $candidates = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, job_id, payload, reserved_at FROM {$table} WHERE queue = %s AND available_at <= %d AND (reserved_at IS NULL OR reserved_at < %d) ORDER BY available_at ASC, id ASC LIMIT %d",
+            $queue,
+            $now,
+            $staleBefore,
+            self::CLAIM_BATCH,
+        ), ARRAY_A);
 
-            if ($data['available_at'] <= $now && ($data['reserved_at'] === null || $isStale)) {
-                if ($isStale) {
-                    error_log(sprintf(
-                        'WP Queue: Releasing stale job %s (reserved for %d seconds)',
-                        $id,
-                        $now - $data['reserved_at'],
-                    ));
-                }
-
-                $jobs[$id]['reserved_at'] = $now;
-                $this->saveQueue($queue, $jobs);
-
-                try {
-                    $job = unserialize($data['payload']);
-                    if ($job instanceof JobInterface) {
-                        return $job;
-                    }
-                } catch (\Throwable $e) {
-                    error_log(sprintf(
-                        'WP Queue: Failed to unserialize job %s: %s',
-                        $id,
-                        $e->getMessage(),
-                    ));
-                    // Release the job back to the queue for retry
-                    $jobs[$id]['reserved_at'] = null;
-                    $this->saveQueue($queue, $jobs);
-                }
+        foreach ((array) $candidates as $row) {
+            if (! $this->claim((int) $row['id'], $staleBefore)) {
+                // Another worker was faster.
+                continue;
             }
+
+            if ($row['reserved_at'] !== null) {
+                error_log(sprintf('WP Queue: Releasing stale job %s', $row['job_id']));
+            }
+
+            $job = $this->decode((string) $row['payload']);
+
+            if ($job instanceof JobInterface) {
+                return $job;
+            }
+
+            error_log(sprintf('WP Queue: Failed to unserialize job %s, removing it', $row['job_id']));
+            $wpdb->delete($table, ['id' => (int) $row['id']], ['%d']);
         }
 
         return null;
     }
 
+    /**
+     * Atomically reserve one row for this worker.
+     */
+    protected function claim(int $rowId, int $staleBefore): bool
+    {
+        global $wpdb;
+
+        $table = Schema::jobsTable();
+
+        $updated = $wpdb->query($wpdb->prepare(
+            "UPDATE {$table} SET reserved_at = %d, reserved_by = %s WHERE id = %d AND (reserved_at IS NULL OR reserved_at < %d)",
+            time(),
+            $this->workerId,
+            $rowId,
+            $staleBefore,
+        ));
+
+        return (int) $updated === 1;
+    }
+
     public function delete(string $jobId): bool
     {
-        foreach ($this->getAllQueues() as $queue) {
-            $jobs = $this->getQueue($queue);
+        global $wpdb;
 
-            if (isset($jobs[$jobId])) {
-                unset($jobs[$jobId]);
-                $this->saveQueue($queue, $jobs);
+        Schema::ensure();
 
-                return true;
-            }
-        }
-
-        // Job not found - this is normal if it was already deleted or never existed
-        return false;
+        return (bool) $wpdb->delete(Schema::jobsTable(), ['job_id' => $jobId], ['%s']);
     }
 
     public function release(JobInterface $job, int $delay = 0): void
     {
-        $queue = $job->getQueue();
-        $jobs = $this->getQueue($queue);
+        global $wpdb;
 
-        if (isset($jobs[$job->getId()])) {
-            $jobs[$job->getId()]['reserved_at'] = null;
-            $jobs[$job->getId()]['available_at'] = time() + $delay;
-            $jobs[$job->getId()]['payload'] = serialize($job);
-            $jobs[$job->getId()]['attempts'] = $job->getAttempts();
-            $this->saveQueue($queue, $jobs);
-        }
+        Schema::ensure();
+
+        $table = Schema::jobsTable();
+
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$table} SET reserved_at = NULL, reserved_by = NULL, available_at = %d, payload = %s, attempts = %d WHERE job_id = %s",
+            time() + $delay,
+            $this->encode($job),
+            $job->getAttempts(),
+            $job->getId(),
+        ));
     }
 
     public function size(string $queue = 'default'): int
     {
-        return count($this->getQueue($queue));
+        global $wpdb;
+
+        Schema::ensure();
+
+        $table = Schema::jobsTable();
+
+        return (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$table} WHERE queue = %s", $queue));
     }
 
     public function clear(string $queue = 'default'): int
     {
-        $count = $this->size($queue);
-        delete_site_option($this->queueKey($queue));
+        global $wpdb;
 
-        return $count;
+        Schema::ensure();
+
+        return (int) $wpdb->delete(Schema::jobsTable(), ['queue' => $queue], ['%s']);
     }
 
     public function isEmpty(string $queue = 'default'): bool
@@ -128,69 +176,67 @@ class DatabaseQueue implements QueueInterface
         return $this->size($queue) === 0;
     }
 
-    /**
-     * @return array<string, array{payload: string, available_at: int, reserved_at: int|null, attempts: int}>
-     */
-    protected function getQueue(string $queue): array
-    {
-        // Clear cache to ensure we get fresh data from DB
-        if (function_exists('wp_cache_delete')) {
-            wp_cache_delete($this->queueKey($queue), 'site-options');
-        }
-
-        return get_site_option($this->queueKey($queue), []);
-    }
-
-    /**
-     * @param  array<string, array{payload: string, available_at: int, reserved_at: int|null, attempts: int}>  $jobs
-     */
-    protected function saveQueue(string $queue, array $jobs): void
-    {
-        if (empty($jobs)) {
-            delete_site_option($this->queueKey($queue));
-        } else {
-            update_site_option($this->queueKey($queue), $jobs);
-        }
-    }
-
-    protected function store(string $queue, JobInterface $job, int $availableAt): void
-    {
-        $jobs = $this->getQueue($queue);
-
-        $jobs[$job->getId()] = [
-            'payload' => serialize($job),
-            'available_at' => $availableAt,
-            'reserved_at' => null,
-            'attempts' => $job->getAttempts(),
-        ];
-
-        update_site_option($this->queueKey($queue), $jobs);
-    }
-
-    protected function queueKey(string $queue): string
-    {
-        return self::PREFIX.'jobs_'.$queue;
-    }
-
-    /**
-     * @return string[]
-     */
-    protected function getAllQueues(): array
+    public function queues(): array
     {
         global $wpdb;
 
         if (! isset($wpdb)) {
-            return ['default'];
+            return [];
         }
 
-        $prefix = self::PREFIX.'jobs_';
-        $results = $wpdb->get_col(
-            $wpdb->prepare(
-                "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
-                $prefix.'%',
-            ),
-        );
+        Schema::ensure();
 
-        return array_map(fn ($key) => str_replace($prefix, '', $key), $results);
+        $table = Schema::jobsTable();
+
+        return array_values(array_map('strval', (array) $wpdb->get_col("SELECT DISTINCT queue FROM {$table}")));
+    }
+
+    public function jobs(string $queue): array
+    {
+        global $wpdb;
+
+        Schema::ensure();
+
+        $table = Schema::jobsTable();
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT job_id, payload, available_at, reserved_at, attempts FROM {$table} WHERE queue = %s ORDER BY available_at ASC, id ASC",
+            $queue,
+        ), ARRAY_A);
+
+        $jobs = [];
+        foreach ((array) $rows as $row) {
+            $jobs[(string) $row['job_id']] = [
+                'payload' => (string) base64_decode((string) $row['payload'], true),
+                'available_at' => (int) $row['available_at'],
+                'reserved_at' => $row['reserved_at'] === null ? null : (int) $row['reserved_at'],
+                'attempts' => (int) $row['attempts'],
+            ];
+        }
+
+        return $jobs;
+    }
+
+    /**
+     * Serialized PHP objects contain NUL bytes (private/protected properties),
+     * which PostgreSQL text columns reject, so payloads are stored base64-encoded.
+     */
+    protected function encode(JobInterface $job): string
+    {
+        return base64_encode(serialize($job));
+    }
+
+    protected function decode(string $payload): mixed
+    {
+        $raw = base64_decode($payload, true);
+
+        if ($raw === false) {
+            return null;
+        }
+
+        try {
+            return unserialize($raw);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }
