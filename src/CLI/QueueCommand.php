@@ -7,6 +7,7 @@ namespace WPQueue\CLI;
 use WP_CLI;
 use WP_CLI\Utils;
 use WPQueue\Admin\SystemStatus;
+use WPQueue\Support\Lock;
 use WPQueue\WPQueue;
 
 if (! defined('ABSPATH')) {
@@ -54,19 +55,11 @@ class QueueCommand
      */
     public function status(array $args, array $assocArgs): void
     {
-        global $wpdb;
-
         $queues = [];
-        $results = $wpdb->get_col(
-            $wpdb->prepare(
-                "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
-                'wp_queue_jobs_%',
-            ),
-        );
+        $manager = WPQueue::manager();
 
-        foreach ($results as $optionName) {
-            $queueName = str_replace('wp_queue_jobs_', '', $optionName);
-            $jobs = get_site_option($optionName, []);
+        foreach ($manager->discoverQueues() as $queueName) {
+            $jobs = $manager->queuedJobs($queueName);
 
             $queues[] = [
                 'queue' => $queueName,
@@ -110,6 +103,15 @@ class QueueCommand
      * default: 256
      * ---
      *
+     * [--all]
+     * : Process every queue that has jobs (the queue argument is processed first).
+     *
+     * [--max-time=<seconds>]
+     * : Stop after this many seconds (0 = no limit).
+     * ---
+     * default: 0
+     * ---
+     *
      * [--daemon]
      * : Run as a daemon worker that continuously polls the queue.
      *   In daemon mode loopback requests and WP-Cron scheduling are skipped
@@ -120,6 +122,7 @@ class QueueCommand
      *     wp queue work
      *     wp queue work emails --limit=50
      *     wp queue work imports --memory=512
+     *     wp queue work --all --limit=50 --max-time=50
      *     wp queue work --daemon
      *     wp queue work imports --daemon --memory=512
      *
@@ -135,28 +138,46 @@ class QueueCommand
             return;
         }
 
-        $limit = (int) ($assocArgs['limit'] ?? 100);
+        $limit = max(1, (int) ($assocArgs['limit'] ?? 100));
+        $maxTime = max(0, (int) ($assocArgs['max-time'] ?? 0));
 
         // Get default memory limit from WordPress
         $defaultMemory = $this->getDefaultMemoryLimit();
         $memory = (int) ($assocArgs['memory'] ?? $defaultMemory);
 
-        WP_CLI::log("Processing jobs from queue: {$queue} (memory limit: {$memory}MB, WordPress default: {$defaultMemory}MB)");
+        $lockTtl = ($maxTime > 0 ? $maxTime : 3600) + 60;
+        $token = Lock::acquire(Lock::WORKER, $lockTtl);
 
-        $worker = WPQueue::worker();
-        $worker->setMemoryLimit($memory);
+        if ($token === null) {
+            WP_CLI::log('Another worker is processing the queues, skipping.');
 
-        $processed = 0;
-
-        while ($processed < $limit) {
-            if (! $worker->runNextJob($queue)) {
-                break;
-            }
-            $processed++;
-            WP_CLI::log("Processed job #{$processed}");
+            return;
         }
 
-        WP_CLI::success("Processed {$processed} jobs from queue: {$queue}");
+        try {
+            WP_CLI::log("Processing jobs from queue: {$queue} (memory limit: {$memory}MB, WordPress default: {$defaultMemory}MB)");
+
+            $worker = WPQueue::worker();
+            $worker->setMemoryLimit($memory);
+            $worker->setMaxJobs($limit);
+            $worker->setMaxTime($maxTime);
+            $worker->resetJobsProcessed();
+
+            $queues = [$queue];
+            if (! empty($assocArgs['all'])) {
+                $queues = array_values(array_unique(array_merge($queues, WPQueue::manager()->discoverQueues())));
+            }
+
+            foreach ($queues as $queueName) {
+                while (! $worker->shouldStop() && $worker->runNextJob($queueName)) {
+                    WP_CLI::log("Processed job #{$worker->getJobsProcessed()} ({$queueName})");
+                }
+            }
+
+            WP_CLI::success("Processed {$worker->getJobsProcessed()} jobs from: ".implode(', ', $queues));
+        } finally {
+            Lock::release(Lock::WORKER, $token);
+        }
     }
 
     /**
@@ -174,9 +195,30 @@ class QueueCommand
 
         WP_CLI::log("Starting daemon worker for queue: {$queue} (memory limit: {$memory}MB)");
 
+        $token = Lock::acquire(Lock::WORKER, 120);
+
+        if ($token === null) {
+            WP_CLI::error('Another worker is processing the queues.');
+        }
+
         $worker = WPQueue::worker();
         $worker->setMemoryLimit($memory);
-        $worker->daemon($queue);
+
+        try {
+            while (! $worker->shouldStop()) {
+                if (! Lock::refresh(Lock::WORKER, $token, 120)) {
+                    WP_CLI::warning('Worker lock lost, stopping.');
+
+                    break;
+                }
+
+                if (! $worker->runNextJob($queue)) {
+                    sleep(3);
+                }
+            }
+        } finally {
+            Lock::release(Lock::WORKER, $token);
+        }
     }
 
     /**

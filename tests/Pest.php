@@ -17,6 +17,14 @@ uses()
     })
     ->in('Unit', 'Feature');
 
+// Unit tests: fresh real-SQL database (SQLite) per test for the queue table and worker lock.
+uses()
+    ->beforeEach(function (): void {
+        $GLOBALS['wpdb'] = new \WPQueue\Tests\Support\SqliteWpdb();
+        \WPQueue\Support\Schema::markReady();
+    })
+    ->in('Unit');
+
 /*
 |--------------------------------------------------------------------------
 | Functions

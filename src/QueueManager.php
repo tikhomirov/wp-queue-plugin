@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WPQueue;
 
 use InvalidArgumentException;
+use WPQueue\Contracts\InspectableQueue;
 use WPQueue\Contracts\QueueInterface;
 use WPQueue\Queue\DatabaseQueue;
 use WPQueue\Queue\MemcachedQueue;
@@ -619,30 +620,36 @@ class QueueManager
     }
 
     /**
-     * Discover queues from database (wp_options).
+     * Discover queues from the database driver table.
      *
      * @return string[]
      */
     protected function discoverDatabaseQueues(): array
     {
-        global $wpdb;
-
-        $results = $wpdb->get_col(
-            $wpdb->prepare(
-                "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
-                'wp_queue_jobs_%',
-            ),
-        );
-
+        $connection = $this->connection('database');
         $queues = ['default'];
-        foreach ($results as $optionName) {
-            $name = str_replace('wp_queue_jobs_', '', $optionName);
-            if ($name && ! in_array($name, $queues, true)) {
-                $queues[] = $name;
+
+        if ($connection instanceof InspectableQueue) {
+            foreach ($connection->queues() as $name) {
+                if ($name !== '' && ! in_array($name, $queues, true)) {
+                    $queues[] = $name;
+                }
             }
         }
 
         return $queues;
+    }
+
+    /**
+     * Pending jobs of a queue for the admin UI / REST / CLI (empty for drivers that cannot list jobs).
+     *
+     * @return array<string, array{payload: string, available_at: int, reserved_at: int|null, attempts: int}>
+     */
+    public function queuedJobs(string $queue): array
+    {
+        $connection = $this->connection();
+
+        return $connection instanceof InspectableQueue ? $connection->jobs($queue) : [];
     }
 
     /**

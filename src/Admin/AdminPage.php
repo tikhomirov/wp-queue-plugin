@@ -1217,18 +1217,11 @@ define('WP_QUEUE_DRIVER', 'memcached');</code></pre>
      */
     protected function getQueuesStatus(): array
     {
-        global $wpdb;
-
         $queues = ['default' => ['size' => 0, 'status' => 'idle']];
+        $manager = WPQueue::manager();
 
-        // Find all queue options
-        $results = $wpdb->get_col(
-            "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE 'wp_queue_jobs_%'",
-        );
-
-        foreach ($results as $optionName) {
-            $queueName = str_replace('wp_queue_jobs_', '', $optionName);
-            $jobs = get_site_option($optionName, []);
+        foreach ($manager->discoverQueues() as $queueName) {
+            $jobs = $manager->queuedJobs($queueName);
 
             $status = 'idle';
             if (WPQueue::isPaused($queueName)) {
@@ -1277,7 +1270,7 @@ define('WP_QUEUE_DRIVER', 'memcached');</code></pre>
      */
     protected function getQueueJobs(string $queueName): array
     {
-        $rawJobs = get_site_option('wp_queue_jobs_'.$queueName, []);
+        $rawJobs = WPQueue::manager()->queuedJobs($queueName);
         $jobs = [];
 
         foreach ($rawJobs as $id => $data) {

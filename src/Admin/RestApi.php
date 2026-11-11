@@ -171,19 +171,11 @@ class RestApi
 
     public function getQueues(): WP_REST_Response
     {
-        global $wpdb;
-
         $queues = [];
-        $results = $wpdb->get_col(
-            $wpdb->prepare(
-                "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
-                'wp_queue_jobs_%',
-            ),
-        );
+        $manager = WPQueue::manager();
 
-        foreach ($results as $optionName) {
-            $queueName = str_replace('wp_queue_jobs_', '', $optionName);
-            $jobs = get_site_option($optionName, []);
+        foreach ($manager->discoverQueues() as $queueName) {
+            $jobs = $manager->queuedJobs($queueName);
 
             $queues[$queueName] = [
                 'size' => count($jobs),
@@ -205,18 +197,15 @@ class RestApi
 
     public function getQueue(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        $queueName = $request->get_param('queue');
-        $optionName = 'wp_queue_jobs_'.$queueName;
-
-        // Проверяем существование очереди
-        $jobs = get_site_option($optionName, null);
+        $queueName = (string) $request->get_param('queue');
+        $manager = WPQueue::manager();
 
         // Очередь существует если есть задачи или это очередь default
-        if ($jobs === null && $queueName !== 'default') {
+        if ($queueName !== 'default' && ! in_array($queueName, $manager->discoverQueues(), true)) {
             return new WP_Error('queue_not_found', 'Queue not found', ['status' => 404]);
         }
 
-        $jobs = $jobs ?? [];
+        $jobs = $manager->queuedJobs($queueName);
 
         return new WP_REST_Response([
             'name' => $queueName,
@@ -228,8 +217,8 @@ class RestApi
 
     public function getQueueJobs(WP_REST_Request $request): WP_REST_Response
     {
-        $queueName = $request->get_param('queue');
-        $jobs = get_site_option('wp_queue_jobs_'.$queueName, []);
+        $queueName = (string) $request->get_param('queue');
+        $jobs = WPQueue::manager()->queuedJobs($queueName);
 
         $result = [];
         foreach ($jobs as $index => $job) {
@@ -259,37 +248,23 @@ class RestApi
         $queueName = $request->get_param('queue');
         $maxJobs = (int) ($request->get_param('max_jobs') ?? 10);
 
-        $worker = WPQueue::worker();
-        $worker->setMaxJobs($maxJobs);
-
-        $processed = 0;
-        while ($processed < $maxJobs && $worker->runNextJob($queueName)) {
-            $processed++;
-        }
+        $processed = WPQueue::processQueues((string) $queueName, max(1, $maxJobs), 50);
 
         return new WP_REST_Response([
-            'success' => true,
-            'processed' => $processed,
+            'success' => $processed !== null,
+            'processed' => (int) $processed,
+            'message' => $processed === null ? 'Another worker is already processing the queue' : '',
         ]);
     }
 
     public function getStats(): WP_REST_Response
     {
-        global $wpdb;
-
-        $queues = [];
         $totalJobs = 0;
+        $manager = WPQueue::manager();
+        $results = $manager->discoverQueues();
 
-        $results = $wpdb->get_col(
-            $wpdb->prepare(
-                "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
-                'wp_queue_jobs_%',
-            ),
-        );
-
-        foreach ($results as $optionName) {
-            $jobs = get_site_option($optionName, []);
-            $totalJobs += count($jobs);
+        foreach ($results as $queueName) {
+            $totalJobs += count($manager->queuedJobs($queueName));
         }
 
         // Получаем статистику из логов
@@ -352,7 +327,7 @@ class RestApi
         $jobId = urldecode($request->get_param('job'));
         $queueName = $request->get_param('queue') ?? 'default';
 
-        $jobs = get_site_option('wp_queue_jobs_'.$queueName, []);
+        $jobs = WPQueue::manager()->queuedJobs((string) $queueName);
 
         if (! isset($jobs[$jobId])) {
             return new WP_Error('job_not_found', 'Job not found', ['status' => 404]);
@@ -392,19 +367,13 @@ class RestApi
         $jobId = urldecode($request->get_param('job'));
         $queueName = $request->get_param('queue') ?? 'default';
 
-        $jobs = get_site_option('wp_queue_jobs_'.$queueName, []);
+        $jobs = WPQueue::manager()->queuedJobs((string) $queueName);
 
         if (! isset($jobs[$jobId])) {
             return new WP_Error('job_not_found', 'Job not found', ['status' => 404]);
         }
 
-        unset($jobs[$jobId]);
-
-        if (empty($jobs)) {
-            delete_site_option('wp_queue_jobs_'.$queueName);
-        } else {
-            update_site_option('wp_queue_jobs_'.$queueName, $jobs);
-        }
+        WPQueue::manager()->connection()->delete($jobId);
 
         return new WP_REST_Response(['success' => true, 'message' => 'Job deleted']);
     }
@@ -439,16 +408,8 @@ class RestApi
 
     public function clearAllQueues(): WP_REST_Response
     {
-        global $wpdb;
-
-        // Находим все опции с джобами
-        $results = $wpdb->get_col(
-            "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE 'wp_queue_jobs_%'",
-        );
-
         $cleared = 0;
-        foreach ($results as $optionName) {
-            $queueName = str_replace('wp_queue_jobs_', '', $optionName);
+        foreach (WPQueue::manager()->discoverQueues() as $queueName) {
             WPQueue::clear($queueName);
             $cleared++;
         }

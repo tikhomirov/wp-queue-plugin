@@ -5,7 +5,7 @@ Tags: queue, cron, background-processing, jobs, scheduler
 Requires at least: 6.2
 Tested up to: 7.0
 Requires PHP: 8.3
-Stable tag: 1.2.1
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -147,6 +147,15 @@ Yes, WP Queue works with WordPress multisite installations.
 
 == Changelog ==
 
+= 1.3.0 =
+* Database driver stores jobs in its own table (`{prefix}queue_jobs`) instead of one wp_options array: a job is claimed with an atomic conditional UPDATE, so parallel workers no longer lose or repeat jobs (also with a persistent object cache such as Redis)
+* Jobs left in wp_options by 1.2.x are migrated automatically
+* One worker lock for all queues (`{prefix}queue_locks`), shared by WP-Cron, loopback, REST "process" and `wp queue work`
+* `wp queue work --all --max-time=<seconds>` for system cron / external workers
+* Daemon mode no longer schedules WP-Cron events and removes stale `wp_queue_process` events
+* dispatch() no longer calls spawn_cron() when DISABLE_WP_CRON is set (it executed every due WP-Cron hook)
+* Payloads are base64-encoded (PostgreSQL text columns reject the NUL bytes of serialized objects)
+
 = 1.2.1 =
 * Added ABSPATH guards to all PHP files
 * Fixed WordPress Plugin Check errors: escaping, i18n placeholders, input sanitization
@@ -180,6 +189,9 @@ Yes, WP Queue works with WordPress multisite installations.
 * Russian localization
 
 == Upgrade Notice ==
+
+= 1.3.0 =
+Database driver moves jobs to its own table with atomic claiming (no lost or duplicated jobs under parallel workers). Pending 1.2.x jobs are migrated automatically.
 
 = 1.2.1 =
 Maintenance release with WordPress Plugin Check fixes and plugin rename to Queue Manager.
