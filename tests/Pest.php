@@ -11,14 +11,19 @@ declare(strict_types=1);
 uses()
     ->beforeEach(function (): void {
         \Brain\Monkey\setUp();
-        // Fresh real-SQL database per test (queue table, worker lock).
-        $GLOBALS['wpdb'] = new \WPQueue\Tests\Support\SqliteWpdb();
-        \WPQueue\Support\Schema::markReady();
     })
     ->afterEach(function (): void {
         \Brain\Monkey\tearDown();
     })
     ->in('Unit', 'Feature');
+
+// Unit tests: fresh real-SQL database (SQLite) per test for the queue table and worker lock.
+uses()
+    ->beforeEach(function (): void {
+        $GLOBALS['wpdb'] = new \WPQueue\Tests\Support\SqliteWpdb();
+        \WPQueue\Support\Schema::markReady();
+    })
+    ->in('Unit');
 
 /*
 |--------------------------------------------------------------------------

@@ -21,6 +21,9 @@ beforeEach(function (): void {
     global $wpdb;
     $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name IN ('wp_queue_jobs_default', 'wp_queue_jobs_emails')");
     $wpdb->query("DELETE FROM {$wpdb->prefix}queue_logs");
+    \WPQueue\Support\Schema::install();
+    $wpdb->query("DELETE FROM {$wpdb->prefix}queue_jobs");
+    $wpdb->query("DELETE FROM {$wpdb->prefix}queue_locks");
 
     // Очистка счётчиков и статусов
     $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE 'wp_queue_%' AND option_name NOT LIKE 'wp_queue_jobs_%'");
