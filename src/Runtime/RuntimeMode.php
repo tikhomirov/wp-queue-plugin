@@ -8,6 +8,9 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
+/**
+ * Backward-compatible facade over Runner (WP Queue <= 1.3).
+ */
 final class RuntimeMode
 {
     public const MODE_CRON_LOOPBACK = 'cron_loopback';
@@ -18,19 +21,15 @@ final class RuntimeMode
 
     public static function get(): string
     {
-        if (defined('WP_QUEUE_RUNTIME_MODE')) {
-            $mode = (string) WP_QUEUE_RUNTIME_MODE;
-            if (self::isValid($mode)) {
-                return $mode;
-            }
-        }
-
-        return apply_filters('wp_queue_runtime_mode', self::MODE_CRON_LOOPBACK);
+        return match (Runner::active()) {
+            Runner::DAEMON => self::MODE_DAEMON,
+            default => self::MODE_CRON_LOOPBACK,
+        };
     }
 
     public static function useLoopback(): bool
     {
-        return self::resolveMode() === self::MODE_CRON_LOOPBACK;
+        return Runner::is(Runner::LOOPBACK);
     }
 
     /**
@@ -38,21 +37,12 @@ final class RuntimeMode
      */
     public static function useCron(): bool
     {
-        return self::resolveMode() !== self::MODE_DAEMON;
+        return Runner::is(Runner::WP_CRON);
     }
 
-    /**
-     * Resolve the effective runtime mode.
-     */
     public static function resolveMode(): string
     {
-        $mode = self::get();
-
-        if ($mode === self::MODE_AUTO) {
-            $mode = self::resolveAuto();
-        }
-
-        return $mode;
+        return self::get();
     }
 
     public static function isDaemonProcess(): bool
@@ -60,16 +50,13 @@ final class RuntimeMode
         if (defined('WP_QUEUE_DAEMON') && WP_QUEUE_DAEMON) {
             return true;
         }
-        if (getenv('WP_QUEUE_DAEMON') === '1') {
-            return true;
-        }
 
-        return false;
+        return getenv('WP_QUEUE_DAEMON') === '1';
     }
 
     public static function resolveAuto(): string
     {
-        return self::isDaemonProcess() ? self::MODE_DAEMON : self::MODE_CRON_LOOPBACK;
+        return self::get();
     }
 
     public static function isValid(string $mode): bool

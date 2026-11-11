@@ -7,7 +7,10 @@ namespace WPQueue\CLI;
 use WP_CLI;
 use WP_CLI\Utils;
 use WPQueue\Admin\SystemStatus;
+use WPQueue\Runtime\Runner;
+use WPQueue\Support\DriverSwitcher;
 use WPQueue\Support\Lock;
+use WPQueue\Support\Settings;
 use WPQueue\WPQueue;
 
 if (! defined('ABSPATH')) {
@@ -112,6 +115,9 @@ class QueueCommand
      * default: 0
      * ---
      *
+     * [--force]
+     * : Process even if another runner (loopback, WP-Cron, sync) is selected.
+     *
      * [--daemon]
      * : Run as a daemon worker that continuously polls the queue.
      *   In daemon mode loopback requests and WP-Cron scheduling are skipped
@@ -132,6 +138,15 @@ class QueueCommand
     {
         $queue = $args[0] ?? 'default';
 
+        // Exactly one runner is active. A system cron line left in place after
+        // switching to another runner only reports that it is still there.
+        if (empty($assocArgs['force']) && ! Runner::cliWorkerAllowed()) {
+            Runner::beat(Runner::DAEMON, 0, true);
+            WP_CLI::log(sprintf('Active runner is "%s"; skipping (use --force to process anyway).', Runner::active()));
+
+            return;
+        }
+
         if (! empty($assocArgs['daemon'])) {
             $this->runDaemon($queue, $assocArgs);
 
@@ -149,6 +164,7 @@ class QueueCommand
         $token = Lock::acquire(Lock::WORKER, $lockTtl);
 
         if ($token === null) {
+            Runner::beat(Runner::DAEMON, 0, true);
             WP_CLI::log('Another worker is processing the queues, skipping.');
 
             return;
@@ -163,6 +179,12 @@ class QueueCommand
             $worker->setMaxTime($maxTime);
             $worker->resetJobsProcessed();
 
+            try {
+                (new DriverSwitcher(WPQueue::manager()))->drainPrevious();
+            } catch (\Throwable $e) {
+                WP_CLI::warning('Moving jobs from the previous driver failed: '.$e->getMessage());
+            }
+
             $queues = [$queue];
             if (! empty($assocArgs['all'])) {
                 $queues = array_values(array_unique(array_merge($queues, WPQueue::manager()->discoverQueues())));
@@ -174,6 +196,7 @@ class QueueCommand
                 }
             }
 
+            Runner::beat(Runner::DAEMON, $worker->getJobsProcessed());
             WP_CLI::success("Processed {$worker->getJobsProcessed()} jobs from: ".implode(', ', $queues));
         } finally {
             Lock::release(Lock::WORKER, $token);
@@ -210,6 +233,12 @@ class QueueCommand
                     WP_CLI::warning('Worker lock lost, stopping.');
 
                     break;
+                }
+
+                $lastBeat ??= 0;
+                if (time() - $lastBeat >= 30) {
+                    Runner::beat(Runner::DAEMON, $worker->getJobsProcessed());
+                    $lastBeat = time();
                 }
 
                 if (! $worker->runNextJob($queue)) {
@@ -455,5 +484,80 @@ class QueueCommand
         $bytes = (int) $value * $multiplier;
 
         return (int) ($bytes / 1024 / 1024);
+    }
+
+    /**
+     * Show or change the storage driver and the queue runner.
+     *
+     * ## OPTIONS
+     *
+     * [--driver=<driver>]
+     * : Storage driver: database, redis, memcached. Waiting jobs are moved.
+     *
+     * [--runner=<runner>]
+     * : Queue runner: auto, daemon, loopback, wp_cron, sync.
+     *
+     * [--store=<where>]
+     * : Where to save: option (plugin settings) or wp-config (WP Queue block).
+     *
+     * ## EXAMPLES
+     *
+     *     wp queue config
+     *     wp queue config --driver=redis
+     *     wp queue config --runner=daemon
+     *
+     * @when after_wp_load
+     */
+    public function config(array $args, array $assocArgs): void
+    {
+        $toConfig = match ($assocArgs['store'] ?? null) {
+            'wp-config', 'config' => true,
+            'option' => false,
+            default => null,
+        };
+
+        if (isset($assocArgs['driver'])) {
+            $result = (new DriverSwitcher(WPQueue::manager()))->switchTo((string) $assocArgs['driver'], $toConfig);
+            $this->reportSettingResult($result);
+        }
+
+        if (isset($assocArgs['runner'])) {
+            $runner = Runner::normalize((string) $assocArgs['runner']);
+
+            if ($runner !== (string) $assocArgs['runner']) {
+                WP_CLI::error('Unknown runner. Use: auto, daemon, loopback, wp_cron, sync.');
+            }
+
+            $result = Settings::persist('runner', $runner, $toConfig);
+            Runner::reset();
+            $this->reportSettingResult($result);
+        }
+
+        $driver = Settings::driver();
+        $runner = Settings::runner();
+        $resolved = Runner::resolve();
+
+        WP_CLI::log(sprintf('Driver:  %s (active: %s, source: %s)', $driver['value'], WPQueue::manager()->getDefaultDriver(), $driver['source']));
+        WP_CLI::log(sprintf('Runner:  %s (active: %s, source: %s)', $runner['value'], $resolved['runner'], $runner['source']));
+        WP_CLI::log('Reason:  '.$resolved['reason']);
+
+        $beat = Runner::heartbeat(Runner::DAEMON);
+        WP_CLI::log('Daemon heartbeat: '.($beat === null ? 'never' : gmdate('Y-m-d H:i:s', $beat['at']).' UTC'.($beat['skipped'] ? ' (skipped)' : '')));
+    }
+
+    /**
+     * @param  array{ok: bool, message: string, snippet?: string}  $result
+     */
+    private function reportSettingResult(array $result): void
+    {
+        if (! $result['ok']) {
+            if (! empty($result['snippet'])) {
+                WP_CLI::log($result['snippet']);
+            }
+
+            WP_CLI::error($result['message']);
+        }
+
+        WP_CLI::success($result['message']);
     }
 }

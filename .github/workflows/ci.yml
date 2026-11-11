@@ -18,6 +18,14 @@ jobs:
       matrix:
         php-version: [ "8.3", "8.4" ]
 
+    # Redis for the RedisQueue tests (atomic pop, parallel workers).
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: --health-cmd="redis-cli ping" --health-interval=5s --health-timeout=3s --health-retries=5
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,6 +34,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-version }}
+          extensions: redis
           coverage: pcov
           tools: composer:v2
 
@@ -43,8 +52,18 @@ jobs:
       - name: Validate composer.json
         run: composer validate --no-check-all --no-check-lock
 
-      - name: Run Unit tests
+      - name: Run Unit tests (phpredis)
         run: ./vendor/bin/pest tests/Unit
+        env:
+          WP_QUEUE_TEST_REDIS_HOST: 127.0.0.1
+          WP_QUEUE_TEST_REDIS_PORT: 6379
+
+      - name: Run Redis tests (Predis)
+        run: ./vendor/bin/pest tests/Unit/RedisQueueTest.php --no-coverage
+        env:
+          WP_QUEUE_TEST_REDIS_CLIENT: predis
+          WP_QUEUE_TEST_REDIS_HOST: 127.0.0.1
+          WP_QUEUE_TEST_REDIS_PORT: 6379
 
   e2e:
     name: E2E Tests (WordPress ${{ matrix.wordpress-version }})

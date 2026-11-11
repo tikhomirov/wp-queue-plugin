@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace WPQueue\Loopback;
 
-use WPQueue\Runtime\RuntimeMode;
+use WPQueue\Runtime\Runner;
 use WPQueue\WPQueue;
 
 if (! defined('ABSPATH')) {
@@ -137,19 +137,19 @@ final class LoopbackDispatcher
      */
     public static function isEnabled(): bool
     {
-        if (defined('WP_QUEUE_LOOPBACK')) {
-            return (bool) WP_QUEUE_LOOPBACK;
-        }
-
-        if (! RuntimeMode::useLoopback()) {
+        // Only the active runner may start workers.
+        if (! Runner::is(Runner::LOOPBACK)) {
             return false;
         }
 
-        /**
-         * Filters whether loopback dispatch is enabled.
-         *
-         * @param  bool  $enabled  Default true.
-         */
-        return apply_filters('wp_queue_loopback_enabled', true);
+        return (bool) apply_filters('wp_queue_loopback_enabled', true);
+    }
+
+    /**
+     * Allow spawning again in this request (after a worker finished).
+     */
+    public static function forget(string $queue): void
+    {
+        unset(self::$spawned[self::sanitizeQueue($queue)]);
     }
 }

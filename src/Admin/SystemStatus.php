@@ -10,6 +10,16 @@ if (! defined('ABSPATH')) {
 
 class SystemStatus
 {
+    public const PING_ACTION = 'wp_queue_ping';
+
+    /**
+     * admin-ajax handler for checkLoopback().
+     */
+    public static function handlePing(): void
+    {
+        wp_die('wp-queue-pong', '', ['response' => 200]);
+    }
+
     /**
      * Check if WP-Cron is disabled.
      */
@@ -92,7 +102,9 @@ class SystemStatus
      */
     public function checkLoopback(): array
     {
-        $body = ['site-health' => 'loopback-test'];
+        // A harmless admin-ajax ping. Never request wp-cron.php here: that would
+        // run every due WP-Cron event, even with DISABLE_WP_CRON.
+        $body = ['action' => self::PING_ACTION];
 
         $cookies = $_COOKIE ?? [];
         if (function_exists('wp_unslash')) {
@@ -113,13 +125,7 @@ class SystemStatus
             $headers['Authorization'] = 'Basic '.base64_encode($user.':'.$pass);
         }
 
-        if (function_exists('site_url')) {
-            $url = site_url('wp-cron.php');
-        } elseif (function_exists('admin_url')) {
-            $url = admin_url('admin-ajax.php');
-        } else {
-            $url = 'http://127.0.0.1';
-        }
+        $url = function_exists('admin_url') ? admin_url('admin-ajax.php') : 'http://127.0.0.1/wp-admin/admin-ajax.php';
 
         $response = wp_remote_post($url, [
             'body' => $body,
@@ -138,6 +144,13 @@ class SystemStatus
         }
 
         $code = wp_remote_retrieve_response_code($response);
+
+        if ($code === 200 && trim((string) wp_remote_retrieve_body($response)) !== 'wp-queue-pong') {
+            return [
+                'status' => 'warning',
+                'message' => __('admin-ajax.php answered, but not with the WP Queue ping response', 'wp-queue'),
+            ];
+        }
 
         if ($code !== 200) {
             return [

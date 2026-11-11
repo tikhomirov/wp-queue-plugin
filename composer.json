@@ -32,7 +32,8 @@
         "laravel/pint": "^1.18",
         "mockery/mockery": "^1.6",
         "brain/monkey": "^2.6",
-        "yoast/phpunit-polyfills": "^3.0"
+        "yoast/phpunit-polyfills": "^3.0",
+        "predis/predis": "^2.2"
     },
     "autoload": {
         "psr-4": {

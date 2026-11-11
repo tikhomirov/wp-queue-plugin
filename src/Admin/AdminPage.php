@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace WPQueue\Admin;
 
-use WPQueue\Loopback\LoopbackDispatcher;
-use WPQueue\Runtime\RuntimeMode;
+use WPQueue\Runtime\Runner;
+use WPQueue\Support\Settings;
 use WPQueue\WPQueue;
 
 if (! defined('ABSPATH')) {
@@ -370,6 +370,12 @@ wp queue system              # Show system status</code></pre>';
                 <?php echo esc_html__('Driver:', 'wp-queue'); ?>
                 <strong><?php echo esc_html(ucfirst($driver)); ?></strong>
                 <a href="<?php echo esc_url(admin_url('admin.php?page=wp-queue&tab=queues&section=drivers')); ?>" class="driver-link">
+                    <?php echo esc_html__('Configure', 'wp-queue'); ?>
+                </a>
+                &nbsp;·&nbsp;
+                <?php echo esc_html__('Runner:', 'wp-queue'); ?>
+                <strong><?php echo esc_html(Runner::label(Runner::active())); ?></strong>
+                <a href="<?php echo esc_url(admin_url('admin.php?page=wp-queue&tab=system&section=status')); ?>" class="driver-link">
                     <?php echo esc_html__('Configure', 'wp-queue'); ?>
                 </a>
             </div>
@@ -1037,34 +1043,36 @@ wp queue system              # Show system status</code></pre>';
         $currentDriver = $manager->getDefaultDriver();
         $configuredDriver = $manager->getConfiguredDriver();
         $drivers = $manager->getAvailableDrivers();
-
-        // Check if there's a fallback situation
+        $setting = Settings::driver();
+        $locked = $setting['source'] === Settings::SOURCE_CONSTANT;
         $hasFallback = $configuredDriver !== $currentDriver;
         ?>
         <div class="wp-queue-drivers">
+            <?php SettingsController::renderNotice(); ?>
+
             <?php if ($hasFallback) { ?>
                 <div class="notice notice-warning" style="margin: 0 0 20px;">
                     <p>
                         <strong><?php echo esc_html__('⚠️ Warning:', 'wp-queue'); ?></strong>
                         <?php echo esc_html(sprintf(
                             // translators: 1: Configured storage backend, 2: Fallback storage backend.
-                            __('Storage backend "%1$s" is configured in wp-config.php, but not available. Falling back to "%2$s".', 'wp-queue'),
+                            __('Storage backend "%1$s" is selected, but not available. Falling back to "%2$s".', 'wp-queue'),
                             $configuredDriver,
                             $currentDriver,
                         )); ?>
                     </p>
-                    <p>
-                        <?php echo esc_html($drivers[$configuredDriver]['message'] ?? __('Check driver settings.', 'wp-queue')); ?>
-                    </p>
-                </div>
-            <?php } else { ?>
-                <div class="notice notice-info" style="margin: 0 0 20px;">
-                    <p>
-                        <strong><?php echo esc_html__('Current storage backend:', 'wp-queue'); ?></strong>
-                        <?php echo esc_html(ucfirst($currentDriver)); ?>
-                    </p>
+                    <p><?php echo esc_html($drivers[$configuredDriver]['message'] ?? __('Check driver settings.', 'wp-queue')); ?></p>
                 </div>
             <?php } ?>
+
+            <div class="notice notice-info" style="margin: 0 0 20px;">
+                <p>
+                    <strong><?php echo esc_html__('Current storage backend:', 'wp-queue'); ?></strong>
+                    <?php echo esc_html(ucfirst($currentDriver)); ?>
+                    — <?php echo esc_html($this->sourceLabel($setting)); ?>
+                </p>
+                <p class="description"><?php echo esc_html__('The storage backend only keeps jobs. How they are executed is chosen in System → Status → Queue runner.', 'wp-queue'); ?></p>
+            </div>
 
             <table class="wp-list-table widefat fixed striped">
                 <thead>
@@ -1072,31 +1080,25 @@ wp queue system              # Show system status</code></pre>';
                         <th style="width: 150px;"><?php echo esc_html__('Storage backend', 'wp-queue'); ?></th>
                         <th style="width: 120px;"><?php echo esc_html__('Status', 'wp-queue'); ?></th>
                         <th><?php echo esc_html__('Description', 'wp-queue'); ?></th>
-                        <th style="width: 100px;"><?php echo esc_html__('Active', 'wp-queue'); ?></th>
+                        <th style="width: 190px;"><?php echo esc_html__('Active', 'wp-queue'); ?></th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach ($drivers as $name => $info) {
                         $isActive = ($name === $currentDriver);
-                        $isConfigured = ($name === $configuredDriver);
                         $status = $info['status'] ?? 'unknown';
+                        $ready = $status === \WPQueue\QueueManager::STATUS_READY;
                         ?>
                         <tr>
-                            <td>
-                                <strong><?php echo esc_html(ucfirst($name)); ?></strong>
-                                <?php if ($isConfigured && ! $isActive) { ?>
-                                    <br><small style="color: #d63638;"><?php echo esc_html__('(configured)', 'wp-queue'); ?></small>
-                                <?php } ?>
-                            </td>
-                            <td>
-                                <?php echo wp_kses_post($this->renderDriverStatusBadge($status, $info)); ?>
-                            </td>
+                            <td><strong><?php echo esc_html(ucfirst($name)); ?></strong></td>
+                            <td><?php echo wp_kses_post($this->renderDriverStatusBadge($status, $info)); ?></td>
                             <td>
                                 <?php echo esc_html($info['message'] ?? $info['info'] ?? ''); ?>
+                                <br><small class="description"><?php echo esc_html($this->driverHint($name)); ?></small>
                                 <?php if ($status === \WPQueue\QueueManager::STATUS_NO_EXTENSION) { ?>
                                     <br><small class="description">
                                         <?php if ($name === 'redis') { ?>
-                                            <?php echo esc_html__('Install: pecl install redis', 'wp-queue'); ?>
+                                            <?php echo esc_html__('Install: pecl install redis, or the Redis Object Cache plugin (Predis).', 'wp-queue'); ?>
                                         <?php } elseif ($name === 'memcached') { ?>
                                             <?php echo esc_html__('Install: pecl install memcached', 'wp-queue'); ?>
                                         <?php } ?>
@@ -1106,8 +1108,20 @@ wp queue system              # Show system status</code></pre>';
                             <td>
                                 <?php if ($isActive) { ?>
                                     <span class="dashicons dashicons-yes-alt" style="color: #00a32a;"></span>
+                                    <?php echo esc_html__('Active', 'wp-queue'); ?>
+                                <?php } elseif ($locked) { ?>
+                                    <small class="description"><?php echo esc_html__('Set in wp-config.php', 'wp-queue'); ?></small>
+                                <?php } elseif (! $ready) { ?>
+                                    <button type="button" class="button" disabled title="<?php echo esc_attr($info['message'] ?? ''); ?>"><?php echo esc_html__('Make active', 'wp-queue'); ?></button>
                                 <?php } else { ?>
-                                    -
+                                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"
+                                          onsubmit="return confirm('<?php echo esc_js(__('Switch the storage backend? Waiting jobs will be moved to it.', 'wp-queue')); ?>');">
+                                        <input type="hidden" name="action" value="wp_queue_set_driver">
+                                        <input type="hidden" name="driver" value="<?php echo esc_attr($name); ?>">
+                                        <?php wp_nonce_field(SettingsController::NONCE_DRIVER); ?>
+                                        <button type="submit" class="button button-primary"><?php echo esc_html__('Make active', 'wp-queue'); ?></button>
+                                        <?php SettingsController::renderStoreCheckbox('driver'); ?>
+                                    </form>
                                 <?php } ?>
                             </td>
                         </tr>
@@ -1116,30 +1130,45 @@ wp queue system              # Show system status</code></pre>';
             </table>
 
             <div class="wp-queue-help" style="margin-top: 20px;">
-                <h3><?php echo esc_html__('How to change the storage backend?', 'wp-queue'); ?></h3>
-                <p><?php echo esc_html__('Add to wp-config.php:', 'wp-queue'); ?></p>
-                <pre><code>define('WP_QUEUE_DRIVER', 'database'); // or 'redis', 'memcached', 'sync', 'auto'</code></pre>
-
-                <h4><?php echo esc_html__('Configure Redis', 'wp-queue'); ?></h4>
-                <pre><code>define('WP_REDIS_HOST', '127.0.0.1');
-define('WP_REDIS_PORT', 6379);
-define('WP_REDIS_PASSWORD', ''); // if required
-define('WP_QUEUE_DRIVER', 'redis');</code></pre>
-
-                <h4><?php echo esc_html__('Configure Memcached', 'wp-queue'); ?></h4>
-                <pre><code>define('WP_MEMCACHED_HOST', '127.0.0.1');
-define('WP_MEMCACHED_PORT', 11211);
-define('WP_QUEUE_DRIVER', 'memcached');</code></pre>
-
-                <div class="notice notice-info inline" style="margin-top: 15px;">
-                    <p>
-                        <strong><?php echo esc_html__('Important:', 'wp-queue'); ?></strong>
-                        <?php echo esc_html__('For Redis/Memcached to work, you need the PHP extension installed and a server available. If not, the system will automatically use the "database" driver.', 'wp-queue'); ?>
-                    </p>
-                </div>
+                <h3><?php echo esc_html__('How switching works', 'wp-queue'); ?></h3>
+                <ul style="list-style: disc; padding-left: 20px;">
+                    <li><?php echo esc_html__('Waiting jobs (ready and delayed) are moved to the new backend under the global worker lock, so nothing is lost or run twice.', 'wp-queue'); ?></li>
+                    <li><?php echo esc_html__('Switching is refused while a worker is running or jobs are being executed; try again in a minute.', 'wp-queue'); ?></li>
+                    <li><?php echo esc_html__('Jobs that other requests add to the previous backend during the switch are moved by the worker within a day.', 'wp-queue'); ?></li>
+                    <li><?php echo esc_html__('If WP_QUEUE_DRIVER is defined in wp-config.php, it has priority. Inside the "// BEGIN WP Queue" block it is edited by the plugin (atomically, with a backup and verification); anywhere else it locks this choice.', 'wp-queue'); ?></li>
+                </ul>
+                <h4><?php echo esc_html__('Redis connection', 'wp-queue'); ?></h4>
+                <p class="description"><?php echo esc_html__('Uses the Redis Object Cache constants (WP_REDIS_HOST, WP_REDIS_PORT, WP_REDIS_PASSWORD, WP_REDIS_DATABASE, WP_REDIS_PREFIX). Jobs are claimed with an atomic Lua script, so every job goes to exactly one worker.', 'wp-queue'); ?></p>
             </div>
         </div>
     <?php
+    }
+
+    protected function driverHint(string $driver): string
+    {
+        return match ($driver) {
+            'database' => __('Works everywhere. Atomic claim with a conditional UPDATE.', 'wp-queue'),
+            'redis' => __('Fast, keeps the database small. Needs a Redis server.', 'wp-queue'),
+            'memcached' => __('Not recommended: jobs cannot be listed or moved and may be evicted.', 'wp-queue'),
+            default => '',
+        };
+    }
+
+    /**
+     * @param  array{value: string, source: string, constant: string|null}  $setting
+     */
+    protected function sourceLabel(array $setting): string
+    {
+        return match ($setting['source']) {
+            Settings::SOURCE_CONSTANT => sprintf(
+                /* translators: %s: constant name */
+                __('set in wp-config.php (%s)', 'wp-queue'),
+                (string) $setting['constant'],
+            ),
+            Settings::SOURCE_MANAGED => __('set in the WP Queue block of wp-config.php (editable here)', 'wp-queue'),
+            Settings::SOURCE_OPTION => __('selected in the admin', 'wp-queue'),
+            default => __('default', 'wp-queue'),
+        };
     }
 
     /**
@@ -1646,6 +1675,11 @@ define('WP_QUEUE_DRIVER', 'memcached');</code></pre>
     {
         $status = new SystemStatus();
         $report = $status->getFullReport();
+
+        if (isset($report['loopback']['status'])) {
+            set_transient(Runner::LOOPBACK_CHECK_TRANSIENT, $report['loopback'], HOUR_IN_SECONDS);
+            Runner::reset();
+        }
         $health = $status->getHealthStatus();
 
         ?>
@@ -1814,6 +1848,11 @@ define('WP_QUEUE_DRIVER', 'memcached');</code></pre>
     {
         $status = new SystemStatus();
         $report = $status->getFullReport();
+
+        if (isset($report['loopback']['status'])) {
+            set_transient(Runner::LOOPBACK_CHECK_TRANSIENT, $report['loopback'], HOUR_IN_SECONDS);
+            Runner::reset();
+        }
         $metrics = WPQueue::logs()->metrics();
         $driver = WPQueue::manager()->getDefaultDriver();
 
@@ -1866,82 +1905,125 @@ define('WP_QUEUE_DRIVER', 'memcached');</code></pre>
             </table>
 
             <?php
-            $resolvedMode = RuntimeMode::resolveMode();
-        $loopbackEnabled = LoopbackDispatcher::isEnabled();
-        $loopbackStatus = $loopbackInfo['status'] ?? 'unknown';
-        $loopbackOk = $loopbackStatus === 'ok';
-
-        if ($resolvedMode === RuntimeMode::MODE_DAEMON) {
-            $handlerLabel = __('Daemon process', 'wp-queue');
-            $handlerClass = 'status-completed';
-            $handlerDescription = __('A daemon worker is expected to process queues. WP-Cron and loopback are disabled.', 'wp-queue');
-        } elseif ($loopbackEnabled && $loopbackOk) {
-            $handlerLabel = __('WP-Cron + Loopback', 'wp-queue');
-            $handlerClass = 'status-completed';
-            $handlerDescription = __('Loopback is enabled and working. Jobs start immediately after dispatch.', 'wp-queue');
-        } elseif ($loopbackEnabled) {
-            $handlerLabel = __('WP-Cron + Loopback', 'wp-queue');
-            $handlerClass = 'status-pending';
-            $handlerDescription = __('Loopback is inactive. Jobs will be processed only by WP-Cron, which can delay execution by up to one minute. Enable loopback or run a daemon worker for instant processing.', 'wp-queue');
-        } else {
-            $handlerLabel = __('WP-Cron only', 'wp-queue');
-            $handlerClass = 'status-pending';
-            $handlerDescription = __('Loopback is disabled. Jobs will be processed only by WP-Cron, which can delay execution by up to one minute. Run a daemon worker for instant processing.', 'wp-queue');
-        }
-
+            $loopbackStatus = $loopbackInfo['status'] ?? 'unknown';
+        $resolved = Runner::resolve();
+        $active = $resolved['runner'];
+        $runnerSetting = Settings::runner();
+        $runnerLocked = $runnerSetting['source'] === Settings::SOURCE_CONSTANT;
         $wpCronDisabled = $report['wp_cron_disabled'] ?? false;
+        $daemonBeat = Runner::heartbeat(Runner::DAEMON);
+        $badgeFor = static fn (bool $used): string => $used ? 'status-completed' : 'status-idle';
         ?>
             <!-- Статус компонентов -->
             <h2><?php echo esc_html__('Component Status', 'wp-queue'); ?></h2>
+            <?php SettingsController::renderNotice(); ?>
             <table class="wp-list-table widefat fixed striped">
                 <tbody>
                     <tr>
                         <th scope="row" style="width:200px;"><?php echo esc_html__('Queue Storage backend', 'wp-queue'); ?></th>
                         <td>
                             <span class="status-badge status-completed"><?php echo esc_html(ucfirst($driver)); ?></span>
+                            <a href="<?php echo esc_url(admin_url('admin.php?page=wp-queue&tab=queues&section=drivers')); ?>"><?php echo esc_html__('Change', 'wp-queue'); ?></a>
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row"><?php echo esc_html__('Queue handler', 'wp-queue'); ?></th>
+                        <th scope="row"><?php echo esc_html__('Queue runner', 'wp-queue'); ?></th>
                         <td>
-                            <span class="status-badge <?php echo esc_attr($handlerClass); ?>"><?php echo esc_html($handlerLabel); ?></span>
-                            <span class="description"><?php echo esc_html($handlerDescription); ?></span>
-                            <?php if (! $wpCronDisabled && $resolvedMode !== RuntimeMode::MODE_DAEMON) { ?>
-                                <span class="description"><?php echo esc_html__('WP-Cron checks the queue every minute as a fallback.', 'wp-queue'); ?></span>
-                            <?php } ?>
+                            <p>
+                                <span class="status-badge status-completed"><?php echo esc_html(Runner::label($active)); ?></span>
+                                <?php if ($resolved['auto']) { ?>
+                                    <strong><?php echo esc_html__('(auto)', 'wp-queue'); ?></strong>
+                                <?php } ?>
+                                <span class="description"><?php echo esc_html($resolved['reason']); ?></span>
+                            </p>
+                            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                                <input type="hidden" name="action" value="wp_queue_set_runner">
+                                <?php wp_nonce_field(SettingsController::NONCE_RUNNER); ?>
+                                <fieldset <?php disabled($runnerLocked); ?>>
+                                    <?php foreach (array_merge([Runner::AUTO], Runner::all()) as $option) {
+                                        $availability = $option === Runner::AUTO ? null : Runner::availability($option);
+                                        ?>
+                                        <label style="display:block;margin:6px 0;">
+                                            <input type="radio" name="runner" value="<?php echo esc_attr($option); ?>" <?php checked($runnerSetting['value'], $option); ?>>
+                                            <strong><?php echo esc_html(Runner::label($option)); ?></strong>
+                                            <?php if ($option === $active) { ?>
+                                                <span class="status-badge status-completed"><?php echo esc_html__('Running', 'wp-queue'); ?></span>
+                                            <?php } elseif ($availability !== null && ! $availability['available']) { ?>
+                                                <span class="status-badge status-pending"><?php echo esc_html__('Unavailable', 'wp-queue'); ?></span>
+                                            <?php } ?>
+                                            <br><span class="description" style="margin-left:24px;display:inline-block;"><?php echo esc_html(Runner::hint($option)); ?>
+                                            <?php if ($availability !== null) { ?>
+                                                <br><em><?php echo esc_html($availability['reason']); ?></em>
+                                            <?php } ?>
+                                            </span>
+                                        </label>
+                                        <?php if ($option === Runner::DAEMON) { ?>
+                                            <div style="margin:0 0 8px 24px;">
+                                                <span class="description"><?php echo esc_html__('Crontab line (as the web server user):', 'wp-queue'); ?></span>
+                                                <pre style="white-space:pre-wrap;"><code><?php echo esc_html(SettingsController::cronCommand()); ?></code></pre>
+                                                <span class="description">
+                                                    <?php echo esc_html__('Last run of the worker (heartbeat):', 'wp-queue'); ?>
+                                                    <strong>
+                                                        <?php
+                                                        echo $daemonBeat === null
+                                                            ? esc_html__('never', 'wp-queue')
+                                                            : esc_html(wp_date('Y-m-d H:i:s', $daemonBeat['at']).' ('.sprintf(
+                                                                /* translators: 1: time ago, 2: jobs */
+                                                                __('%1$s ago, jobs: %2$d', 'wp-queue'),
+                                                                human_time_diff($daemonBeat['at'], time()),
+                                                                $daemonBeat['processed'],
+                                                            ).')'.($daemonBeat['skipped'] ? ' — '.__('skipped: another runner is selected or a worker was busy', 'wp-queue') : ''));
+                                            ?>
+                                                    </strong>
+                                                </span>
+                                            </div>
+                                        <?php } ?>
+                                    <?php } ?>
+                                </fieldset>
+                                <?php if ($runnerLocked) { ?>
+                                    <p class="description"><?php echo esc_html(sprintf(
+                                        /* translators: %s: constant */
+                                        __('Set in wp-config.php (%s). Remove the constant to choose here.', 'wp-queue'),
+                                        (string) $runnerSetting['constant'],
+                                    )); ?></p>
+                                <?php } else { ?>
+                                    <?php SettingsController::renderStoreCheckbox('runner'); ?>
+                                    <p>
+                                        <?php submit_button(__('Save runner', 'wp-queue'), 'primary', 'submit', false); ?>
+                                        <span class="description"><?php echo esc_html($this->sourceLabel($runnerSetting)); ?></span>
+                                    </p>
+                                <?php } ?>
+                            </form>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><?php echo esc_html__('WP-Cron', 'wp-queue'); ?></th>
                         <td>
-                            <?php if ($wpCronDisabled) { ?>
-                                <span class="status-badge status-failed"><?php echo esc_html__('Disabled', 'wp-queue'); ?></span>
-                                <span class="description"><?php echo esc_html__('Configure system cron', 'wp-queue'); ?></span>
-                            <?php } else { ?>
-                                <span class="status-badge status-completed"><?php echo esc_html__('Active', 'wp-queue'); ?></span>
-                            <?php } ?>
+                            <span class="status-badge <?php echo esc_attr($badgeFor($active === Runner::WP_CRON)); ?>">
+                                <?php echo esc_html($active === Runner::WP_CRON ? __('Used by the runner', 'wp-queue') : __('Not used by the runner', 'wp-queue')); ?>
+                            </span>
+                            <span class="description">
+                                <?php echo esc_html($wpCronDisabled
+                                    ? __('WordPress WP-Cron is disabled (DISABLE_WP_CRON).', 'wp-queue')
+                                    : __('WordPress WP-Cron is enabled.', 'wp-queue')); ?>
+                            </span>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><?php echo esc_html__('Loopback', 'wp-queue'); ?></th>
                         <td>
+                            <span class="status-badge <?php echo esc_attr($badgeFor($active === Runner::LOOPBACK)); ?>">
+                                <?php echo esc_html($active === Runner::LOOPBACK ? __('Used by the runner', 'wp-queue') : __('Not used by the runner', 'wp-queue')); ?>
+                            </span>
                             <?php
-                            $lbBadgeClass = match ($loopbackStatus) {
-                                'ok' => 'status-completed',
-                                'warning' => 'status-pending',
-                                default => 'status-failed',
+                            $lbStatusLabel = match ($loopbackStatus) {
+                                'ok' => __('check OK', 'wp-queue'),
+                                'warning' => __('check: warning', 'wp-queue'),
+                                'error' => __('check failed', 'wp-queue'),
+                                default => __('not checked', 'wp-queue'),
                             };
-        $lbStatusLabel = match ($loopbackStatus) {
-            'ok' => __('OK', 'wp-queue'),
-            'warning' => __('Warning', 'wp-queue'),
-            'error' => __('Error', 'wp-queue'),
-            default => __('Unknown', 'wp-queue'),
-        };
         ?>
-                            <span class="status-badge <?php echo esc_attr($lbBadgeClass); ?>"><?php echo esc_html($lbStatusLabel); ?></span>
-                            <?php if ($loopbackStatus !== 'ok' && isset($loopbackInfo['message'])) { ?>
-                                <span class="description"><?php echo esc_html($loopbackInfo['message']); ?></span>
-                            <?php } ?>
+                            <span class="description"><?php echo esc_html($lbStatusLabel); ?><?php echo $loopbackStatus !== 'ok' && isset($loopbackInfo['message']) ? ': '.esc_html($loopbackInfo['message']) : ''; ?></span>
                         </td>
                     </tr>
                 </tbody>
@@ -2303,10 +2385,12 @@ wp queue cron run hook_name</code></pre>
                 <h2><?php echo esc_html__('When to use a daemon', 'wp-queue'); ?></h2>
                 <p><?php echo esc_html__('Use a daemon worker on VPS, Docker or dedicated servers where you can keep a process running. It polls the queue continuously and starts jobs immediately. Without a daemon, WP Queue relies on WP-Cron and/or loopback, which can delay jobs by up to a minute.', 'wp-queue'); ?></p>
 
-                <h2><?php echo esc_html__('1. Enable daemon runtime mode', 'wp-queue'); ?></h2>
-                <p><?php echo esc_html__('Add this to wp-config.php:', 'wp-queue'); ?></p>
-                <pre><code>define('WP_QUEUE_RUNTIME_MODE', 'daemon');</code></pre>
-                <p class="description"><?php echo esc_html__('In this mode WP-Cron scheduling and loopback requests are disabled automatically.', 'wp-queue'); ?></p>
+                <h2><?php echo esc_html__('1. Select the daemon runner', 'wp-queue'); ?></h2>
+                <p><?php echo esc_html__('In System → Status → Queue runner choose "Daemon / system cron" (or keep "Auto": a running worker is detected by its heartbeat). The same can be forced in wp-config.php:', 'wp-queue'); ?></p>
+                <pre><code>define('WP_QUEUE_RUNNER', 'daemon');</code></pre>
+                <p class="description"><?php echo esc_html__('With this runner WP-Cron scheduling and loopback requests are not used.', 'wp-queue'); ?></p>
+                <p><?php echo esc_html__('Simplest option — system cron every minute:', 'wp-queue'); ?></p>
+                <pre><code><?php echo esc_html(SettingsController::cronCommand()); ?></code></pre>
 
                 <h2><?php echo esc_html__('2. Run the worker', 'wp-queue'); ?></h2>
 
@@ -2319,7 +2403,7 @@ wp queue cron run hook_name</code></pre>
                 <p><?php echo esc_html__('If WP-CLI is not available, create a PHP script that boots WordPress and runs the worker loop:', 'wp-queue'); ?></p>
                 <pre><code>&lt;?php
 define('WP_QUEUE_DAEMON', true);
-define('WP_QUEUE_RUNTIME_MODE', 'daemon');
+define('WP_QUEUE_RUNNER', 'daemon');
 
 require '/var/www/html/wordpress/wp-load.php';
 

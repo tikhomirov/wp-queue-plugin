@@ -244,6 +244,35 @@ class PhpRedisClient implements RedisClientInterface
         return $this->redis->keys($pattern) ?: [];
     }
 
+    public function evalScript(string $script, array $keys, array $args = []): mixed
+    {
+        $this->ensureConnected();
+
+        // phpredis applies OPT_PREFIX to the KEYS of EVAL itself.
+        $result = $this->redis->eval($script, array_merge($keys, array_map('strval', $args)), count($keys));
+
+        if ($result === false && ($error = $this->redis->getLastError()) !== null) {
+            $this->redis->clearLastError();
+            throw new \RuntimeException('Redis script failed: '.$error);
+        }
+
+        return $result;
+    }
+
+    public function sAdd(string $key, string $member): int
+    {
+        $this->ensureConnected();
+
+        return (int) $this->redis->sAdd($key, $member);
+    }
+
+    public function sMembers(string $key): array
+    {
+        $this->ensureConnected();
+
+        return array_values(array_map('strval', $this->redis->sMembers($key) ?: []));
+    }
+
     public function getClientType(): string
     {
         return 'phpredis';

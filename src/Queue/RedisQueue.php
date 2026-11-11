@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace WPQueue\Queue;
 
+use WPQueue\Contracts\InspectableQueue;
 use WPQueue\Contracts\JobInterface;
 use WPQueue\Contracts\QueueInterface;
+use WPQueue\Contracts\TransferableQueue;
 use WPQueue\Queue\Redis\RedisClientFactory;
 use WPQueue\Queue\Redis\RedisClientInterface;
 
@@ -30,11 +32,33 @@ if (! defined('ABSPATH')) {
  *
  * Supports both phpredis extension and Predis library (via redis-cache plugin).
  *
+ * Layout per queue (all changes go through Lua scripts, so they are atomic):
+ * - q:{queue}:data      hash  job id => JSON (payload, attempts, available_at)
+ * - q:{queue}:ready     list  job ids ready to run
+ * - q:{queue}:delayed   zset  job id => available_at
+ * - q:{queue}:reserved  zset  job id => reserved_at (claimed by a worker)
+ * - queues              set   known queue names
+ * - index               hash  job id => queue name
+ *
+ * pop() moves due delayed jobs and stale reservations back to the ready list,
+ * then LPOPs one id and reserves it in the same script, so every job is handed
+ * to exactly one worker.
+ *
  * @see https://github.com/rhubarbgroup/redis-cache
  */
-class RedisQueue implements QueueInterface
+class RedisQueue implements InspectableQueue, QueueInterface, TransferableQueue
 {
     protected const PREFIX = 'wp_queue:';
+
+    /**
+     * Seconds after which a reservation is considered abandoned.
+     */
+    public const STALE_THRESHOLD = 300;
+
+    /**
+     * @var array<string, true> Queues whose legacy (<= 1.3.0) keys were imported.
+     */
+    protected array $legacyChecked = [];
 
     protected ?RedisClientInterface $client = null;
 
@@ -164,27 +188,16 @@ class RedisQueue implements QueueInterface
 
     public function push(JobInterface $job): string
     {
-        $queue = $job->getQueue();
+        $queue = $job->getQueue() ?: 'default';
         $availableAt = time() + $job->getDelay();
 
-        $data = [
-            'id' => $job->getId(),
-            'payload' => serialize($job),
-            'available_at' => $availableAt,
-            'reserved_at' => null,
-            'attempts' => $job->getAttempts(),
-            'created_at' => time(),
-        ];
-
-        $jsonData = json_encode($data);
-
-        if ($job->getDelay() > 0) {
-            // Use sorted set for delayed jobs
-            $this->connection()->zAdd($this->delayedKey($queue), (float) $availableAt, $jsonData);
-        } else {
-            // Use list for immediate jobs
-            $this->connection()->rPush($this->queueKey($queue), $jsonData);
-        }
+        $this->connection()->evalScript(self::SCRIPT_PUSH, $this->keys($queue), [
+            $job->getId(),
+            $this->encode($job, $availableAt),
+            $queue,
+            $availableAt,
+            $job->getDelay() > 0 ? 1 : 0,
+        ]);
 
         return $job->getId();
     }
@@ -198,124 +211,66 @@ class RedisQueue implements QueueInterface
 
     public function pop(string $queue = 'default'): ?JobInterface
     {
-        // First, migrate delayed jobs that are ready
-        $this->migrateDelayedJobs($queue);
+        $this->importLegacy($queue);
 
-        // Pop from queue
-        $data = $this->connection()->lPop($this->queueKey($queue));
-
-        if ($data === null) {
-            return null;
-        }
-
-        $payload = json_decode($data, true);
-
-        if (! is_array($payload) || ! isset($payload['payload'])) {
-            return null;
-        }
-
-        // Mark as reserved
-        $payload['reserved_at'] = time();
-        $this->connection()->hSet(
-            $this->reservedKey($queue),
-            $payload['id'],
-            json_encode($payload),
-        );
-
-        $job = unserialize($payload['payload']);
-
-        return $job instanceof JobInterface ? $job : null;
-    }
-
-    /**
-     * Migrate delayed jobs that are ready to be processed.
-     */
-    protected function migrateDelayedJobs(string $queue): void
-    {
         $now = time();
-        $delayedKey = $this->delayedKey($queue);
-        $queueKey = $this->queueKey($queue);
 
-        // Get all delayed jobs that are ready
-        $jobs = $this->connection()->zRangeByScore($delayedKey, '-inf', (string) $now);
+        while (true) {
+            $result = $this->connection()->evalScript(self::SCRIPT_POP, $this->keys($queue), [
+                $now,
+                $now - self::STALE_THRESHOLD,
+            ]);
 
-        foreach ($jobs as $job) {
-            // Remove from delayed set
-            $this->connection()->zRem($delayedKey, $job);
+            if (! is_array($result) || count($result) < 2) {
+                return null;
+            }
 
-            // Add to main queue
-            $this->connection()->rPush($queueKey, $job);
+            $job = $this->decode((string) $result[1]);
+
+            if ($job instanceof JobInterface) {
+                return $job;
+            }
+
+            error_log(sprintf('WP Queue: Failed to unserialize Redis job %s, removing it', (string) $result[0]));
+            $this->delete((string) $result[0]);
         }
     }
 
     public function delete(string $jobId): bool
     {
-        $queues = $this->getAllQueues();
+        $queue = $this->queueOf($jobId);
 
-        foreach ($queues as $queue) {
-            // Check reserved jobs
-            if ($this->connection()->hDel($this->reservedKey($queue), $jobId) > 0) {
-                return true;
-            }
-
-            // Check main queue (slower, but necessary)
-            $jobs = $this->connection()->lRange($this->queueKey($queue), 0, -1);
-            foreach ($jobs as $index => $data) {
-                $payload = json_decode($data, true);
-                if (isset($payload['id']) && $payload['id'] === $jobId) {
-                    $this->connection()->lRem($this->queueKey($queue), $data, 1);
-
-                    return true;
-                }
-            }
-
-            // Check delayed jobs
-            $delayed = $this->connection()->zRange($this->delayedKey($queue), 0, -1);
-            foreach ($delayed as $data) {
-                $payload = json_decode($data, true);
-                if (isset($payload['id']) && $payload['id'] === $jobId) {
-                    $this->connection()->zRem($this->delayedKey($queue), $data);
-
-                    return true;
-                }
-            }
+        if ($queue === null) {
+            return false;
         }
 
-        return false;
+        return (int) $this->connection()->evalScript(self::SCRIPT_DELETE, $this->keys($queue), [$jobId]) > 0;
     }
 
     public function release(JobInterface $job, int $delay = 0): void
     {
-        $queue = $job->getQueue();
+        $queue = $job->getQueue() ?: 'default';
+        $availableAt = time() + $delay;
 
-        // Remove from reserved
-        $this->connection()->hDel($this->reservedKey($queue), $job->getId());
-
-        // Re-add to queue
-        $job->delay($delay);
-        $this->push($job);
+        $this->connection()->evalScript(self::SCRIPT_RELEASE, $this->keys($queue), [
+            $job->getId(),
+            $this->encode($job, $availableAt),
+            $queue,
+            $availableAt,
+            $delay > 0 ? 1 : 0,
+        ]);
     }
 
     public function size(string $queue = 'default'): int
     {
-        $mainSize = (int) $this->connection()->lLen($this->queueKey($queue));
-        $delayedSize = (int) $this->connection()->zCard($this->delayedKey($queue));
-        $reservedSize = (int) $this->connection()->hLen($this->reservedKey($queue));
+        $this->importLegacy($queue);
 
-        return $mainSize + $delayedSize + $reservedSize;
+        return (int) $this->connection()->evalScript("return redis.call('HLEN', KEYS[4])", $this->keys($queue));
     }
 
     public function clear(string $queue = 'default'): int
     {
-        $count = $this->size($queue);
-
-        $this->connection()->del([
-            $this->queueKey($queue),
-            $this->delayedKey($queue),
-            $this->reservedKey($queue),
-        ]);
-
-        return $count;
+        return (int) $this->connection()->evalScript(self::SCRIPT_CLEAR, $this->keys($queue));
     }
 
     public function isEmpty(string $queue = 'default'): bool
@@ -323,41 +278,77 @@ class RedisQueue implements QueueInterface
         return $this->size($queue) === 0;
     }
 
-    /**
-     * Get all queue names.
-     *
-     * @return string[]
-     */
-    protected function getAllQueues(): array
+    public function queues(): array
     {
-        $prefix = $this->config['prefix'].'jobs:';
-        $keys = $this->connection()->keys('jobs:*');
+        return $this->connection()->sMembers('queues');
+    }
 
-        $queues = [];
-        foreach ($keys as $key) {
-            // Remove prefix and suffix
-            $name = str_replace(['jobs:', ':delayed', ':reserved'], '', $key);
-            if ($name && ! in_array($name, $queues, true)) {
-                $queues[] = $name;
+    public function jobs(string $queue): array
+    {
+        $raw = $this->connection()->evalScript(self::SCRIPT_JOBS, $this->keys($queue));
+        $jobs = [];
+
+        if (! is_array($raw)) {
+            return $jobs;
+        }
+
+        for ($i = 0; $i + 2 < count($raw); $i += 3) {
+            $data = json_decode((string) $raw[$i + 1], true);
+
+            if (! is_array($data)) {
+                continue;
+            }
+
+            $reservedAt = $raw[$i + 2];
+            $jobs[(string) $raw[$i]] = [
+                'payload' => (string) base64_decode((string) ($data['payload'] ?? ''), true),
+                'available_at' => (int) ($data['available_at'] ?? 0),
+                'reserved_at' => ($reservedAt === false || $reservedAt === null || $reservedAt === '') ? null : (int) $reservedAt,
+                'attempts' => (int) ($data['attempts'] ?? 0),
+            ];
+        }
+
+        uasort($jobs, static fn (array $a, array $b): int => $a['available_at'] <=> $b['available_at']);
+
+        return $jobs;
+    }
+
+    public function reservedCount(string $queue): int
+    {
+        return (int) $this->connection()->evalScript(
+            "return redis.call('ZCOUNT', KEYS[3], ARGV[1], '+inf')",
+            $this->keys($queue),
+            [time() - self::STALE_THRESHOLD],
+        );
+    }
+
+    public function takePending(string $queue, int $limit = 500): array
+    {
+        $this->importLegacy($queue);
+
+        $raw = $this->connection()->evalScript(self::SCRIPT_TAKE, $this->keys($queue), [
+            time() - self::STALE_THRESHOLD,
+            $limit,
+        ]);
+
+        $taken = [];
+
+        if (! is_array($raw)) {
+            return $taken;
+        }
+
+        for ($i = 0; $i + 1 < count($raw); $i += 2) {
+            $data = json_decode((string) $raw[$i + 1], true);
+            $job = is_array($data) ? $this->decode((string) $raw[$i + 1]) : null;
+
+            if ($job instanceof JobInterface) {
+                $taken[] = ['job' => $job, 'available_at' => (int) ($data['available_at'] ?? time())];
+            } else {
+                error_log(sprintf('WP Queue: Dropped unreadable Redis job %s while moving queue %s', (string) $raw[$i], $queue));
             }
         }
 
-        return $queues ?: ['default'];
-    }
-
-    protected function queueKey(string $queue): string
-    {
-        return 'jobs:'.$queue;
-    }
-
-    protected function delayedKey(string $queue): string
-    {
-        return 'jobs:'.$queue.':delayed';
-    }
-
-    protected function reservedKey(string $queue): string
-    {
-        return 'jobs:'.$queue.':reserved';
+        return $taken;
     }
 
     /**
@@ -367,12 +358,134 @@ class RedisQueue implements QueueInterface
      */
     public function stats(string $queue = 'default'): array
     {
+        $raw = $this->connection()->evalScript(
+            "return {redis.call('LLEN', KEYS[1]), redis.call('ZCARD', KEYS[2]), redis.call('ZCARD', KEYS[3]), redis.call('HLEN', KEYS[4])}",
+            $this->keys($queue),
+        );
+        $raw = is_array($raw) ? array_map('intval', $raw) : [0, 0, 0, 0];
+
         return [
-            'pending' => (int) $this->connection()->lLen($this->queueKey($queue)),
-            'delayed' => (int) $this->connection()->zCard($this->delayedKey($queue)),
-            'reserved' => (int) $this->connection()->hLen($this->reservedKey($queue)),
-            'total' => $this->size($queue),
+            'pending' => $raw[0] ?? 0,
+            'delayed' => $raw[1] ?? 0,
+            'reserved' => $raw[2] ?? 0,
+            'total' => $raw[3] ?? 0,
         ];
+    }
+
+    /**
+     * Get all queue names.
+     *
+     * @return string[]
+     */
+    protected function getAllQueues(): array
+    {
+        $queues = $this->queues();
+
+        return $queues ?: ['default'];
+    }
+
+    /**
+     * Keys of one queue in the order the scripts expect.
+     *
+     * @return list<string>
+     */
+    protected function keys(string $queue): array
+    {
+        return [
+            'q:'.$queue.':ready',
+            'q:'.$queue.':delayed',
+            'q:'.$queue.':reserved',
+            'q:'.$queue.':data',
+            'queues',
+            'index',
+        ];
+    }
+
+    protected function queueOf(string $jobId): ?string
+    {
+        $queue = $this->connection()->evalScript("return redis.call('HGET', KEYS[1], ARGV[1])", ['index'], [$jobId]);
+
+        return is_string($queue) && $queue !== '' ? $queue : null;
+    }
+
+    protected function encode(JobInterface $job, int $availableAt): string
+    {
+        return (string) json_encode([
+            'id' => $job->getId(),
+            // Serialized objects contain NUL bytes and may hold non-UTF-8 data.
+            'payload' => base64_encode(serialize($job)),
+            'attempts' => $job->getAttempts(),
+            'available_at' => $availableAt,
+            'created_at' => time(),
+        ]);
+    }
+
+    protected function decode(string $json): ?JobInterface
+    {
+        $data = json_decode($json, true);
+
+        if (! is_array($data) || ! isset($data['payload'])) {
+            return null;
+        }
+
+        $raw = base64_decode((string) $data['payload'], true);
+
+        if ($raw === false) {
+            return null;
+        }
+
+        try {
+            $job = unserialize($raw);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $job instanceof JobInterface ? $job : null;
+    }
+
+    /**
+     * Move jobs stored by WP Queue <= 1.3.0 (JSON in jobs:{queue} lists) to the
+     * current layout, once per process and queue.
+     */
+    protected function importLegacy(string $queue): void
+    {
+        if (isset($this->legacyChecked[$queue])) {
+            return;
+        }
+
+        $this->legacyChecked[$queue] = true;
+        $client = $this->connection();
+
+        $legacy = [];
+
+        while (($item = $client->lPop('jobs:'.$queue)) !== null) {
+            $legacy[] = $item;
+        }
+
+        foreach ($client->zRange('jobs:'.$queue.':delayed', 0, -1) as $item) {
+            if ($client->zRem('jobs:'.$queue.':delayed', $item) === 1) {
+                $legacy[] = $item;
+            }
+        }
+
+        foreach ($legacy as $item) {
+            $data = json_decode($item, true);
+
+            if (! is_array($data) || ! isset($data['payload'])) {
+                continue;
+            }
+
+            try {
+                $job = unserialize((string) $data['payload']);
+            } catch (\Throwable) {
+                $job = null;
+            }
+
+            if ($job instanceof JobInterface) {
+                $job->delay(max(0, (int) ($data['available_at'] ?? 0) - time()));
+                $this->push($job);
+            }
+        }
     }
 
     /**
@@ -387,4 +500,115 @@ class RedisQueue implements QueueInterface
     {
         $this->disconnect();
     }
+
+    // KEYS: ready, delayed, reserved, data, queues, index
+    // ARGV: id, json, queue, available_at, delayed(0|1)
+    protected const SCRIPT_PUSH = <<<'LUA'
+redis.call('HSET', KEYS[4], ARGV[1], ARGV[2])
+redis.call('HSET', KEYS[6], ARGV[1], ARGV[3])
+redis.call('SADD', KEYS[5], ARGV[3])
+if ARGV[5] == '1' then
+  redis.call('ZADD', KEYS[2], ARGV[4], ARGV[1])
+else
+  redis.call('RPUSH', KEYS[1], ARGV[1])
+end
+return 1
+LUA;
+
+    // ARGV: now, stale_before
+    protected const SCRIPT_POP = <<<'LUA'
+local now = tonumber(ARGV[1])
+local due = redis.call('ZRANGEBYSCORE', KEYS[2], '-inf', now, 'LIMIT', 0, 100)
+for _, id in ipairs(due) do
+  redis.call('ZREM', KEYS[2], id)
+  redis.call('RPUSH', KEYS[1], id)
+end
+local stale = redis.call('ZRANGEBYSCORE', KEYS[3], '-inf', '(' .. ARGV[2], 'LIMIT', 0, 100)
+for _, id in ipairs(stale) do
+  redis.call('ZREM', KEYS[3], id)
+  redis.call('RPUSH', KEYS[1], id)
+end
+while true do
+  local id = redis.call('LPOP', KEYS[1])
+  if not id then
+    return false
+  end
+  local data = redis.call('HGET', KEYS[4], id)
+  if data then
+    redis.call('ZADD', KEYS[3], now, id)
+    return {id, data}
+  end
+end
+LUA;
+
+    // ARGV: id
+    protected const SCRIPT_DELETE = <<<'LUA'
+local removed = redis.call('HDEL', KEYS[4], ARGV[1])
+redis.call('ZREM', KEYS[3], ARGV[1])
+redis.call('ZREM', KEYS[2], ARGV[1])
+redis.call('LREM', KEYS[1], 0, ARGV[1])
+redis.call('HDEL', KEYS[6], ARGV[1])
+return removed
+LUA;
+
+    // ARGV: id, json, queue, available_at, delayed(0|1)
+    protected const SCRIPT_RELEASE = <<<'LUA'
+redis.call('ZREM', KEYS[3], ARGV[1])
+redis.call('LREM', KEYS[1], 0, ARGV[1])
+redis.call('ZREM', KEYS[2], ARGV[1])
+redis.call('HSET', KEYS[4], ARGV[1], ARGV[2])
+redis.call('HSET', KEYS[6], ARGV[1], ARGV[3])
+redis.call('SADD', KEYS[5], ARGV[3])
+if ARGV[5] == '1' then
+  redis.call('ZADD', KEYS[2], ARGV[4], ARGV[1])
+else
+  redis.call('RPUSH', KEYS[1], ARGV[1])
+end
+return 1
+LUA;
+
+    protected const SCRIPT_CLEAR = <<<'LUA'
+local ids = redis.call('HKEYS', KEYS[4])
+for _, id in ipairs(ids) do
+  redis.call('HDEL', KEYS[6], id)
+end
+redis.call('DEL', KEYS[1], KEYS[2], KEYS[3], KEYS[4])
+return #ids
+LUA;
+
+    protected const SCRIPT_JOBS = <<<'LUA'
+local all = redis.call('HGETALL', KEYS[4])
+local out = {}
+for i = 1, #all, 2 do
+  table.insert(out, all[i])
+  table.insert(out, all[i + 1])
+  local score = redis.call('ZSCORE', KEYS[3], all[i])
+  table.insert(out, score or '')
+end
+return out
+LUA;
+
+    // ARGV: stale_before, limit
+    protected const SCRIPT_TAKE = <<<'LUA'
+local limit = tonumber(ARGV[2])
+local out = {}
+local ids = {}
+for _, id in ipairs(redis.call('LRANGE', KEYS[1], 0, limit - 1)) do table.insert(ids, id) end
+for _, id in ipairs(redis.call('ZRANGE', KEYS[2], 0, limit - 1)) do table.insert(ids, id) end
+for _, id in ipairs(redis.call('ZRANGEBYSCORE', KEYS[3], '-inf', '(' .. ARGV[1], 'LIMIT', 0, limit)) do table.insert(ids, id) end
+for _, id in ipairs(ids) do
+  if #out >= limit * 2 then break end
+  local data = redis.call('HGET', KEYS[4], id)
+  redis.call('LREM', KEYS[1], 0, id)
+  redis.call('ZREM', KEYS[2], id)
+  redis.call('ZREM', KEYS[3], id)
+  redis.call('HDEL', KEYS[4], id)
+  redis.call('HDEL', KEYS[6], id)
+  if data then
+    table.insert(out, id)
+    table.insert(out, data)
+  end
+end
+return out
+LUA;
 }
