@@ -7,6 +7,7 @@ namespace WPQueue\Queue;
 use WPQueue\Contracts\InspectableQueue;
 use WPQueue\Contracts\JobInterface;
 use WPQueue\Contracts\QueueInterface;
+use WPQueue\Contracts\TransferableQueue;
 use WPQueue\Support\Schema;
 
 if (! defined('ABSPATH')) {
@@ -20,7 +21,7 @@ if (! defined('ABSPATH')) {
  * which is atomic in every SQL engine, so concurrent workers can neither take the
  * same job twice nor lose jobs. The object cache (Redis etc.) is not involved.
  */
-class DatabaseQueue implements InspectableQueue, QueueInterface
+class DatabaseQueue implements InspectableQueue, QueueInterface, TransferableQueue
 {
     /**
      * Seconds after which a reserved job is considered abandoned (worker crashed).
@@ -214,6 +215,63 @@ class DatabaseQueue implements InspectableQueue, QueueInterface
         }
 
         return $jobs;
+    }
+
+    public function reservedCount(string $queue): int
+    {
+        global $wpdb;
+
+        Schema::ensure();
+
+        $table = Schema::jobsTable();
+
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table} WHERE queue = %s AND reserved_at IS NOT NULL AND reserved_at >= %d",
+            $queue,
+            time() - self::STALE_THRESHOLD,
+        ));
+    }
+
+    public function takePending(string $queue, int $limit = 500): array
+    {
+        global $wpdb;
+
+        Schema::ensure();
+
+        $table = Schema::jobsTable();
+        $staleBefore = time() - self::STALE_THRESHOLD;
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, job_id, payload, available_at FROM {$table} WHERE queue = %s AND (reserved_at IS NULL OR reserved_at < %d) ORDER BY available_at ASC, id ASC LIMIT %d",
+            $queue,
+            $staleBefore,
+            $limit,
+        ), ARRAY_A);
+
+        $taken = [];
+
+        foreach ((array) $rows as $row) {
+            // Conditional delete: a worker may have claimed the row meanwhile.
+            $deleted = $wpdb->query($wpdb->prepare(
+                "DELETE FROM {$table} WHERE id = %d AND (reserved_at IS NULL OR reserved_at < %d)",
+                (int) $row['id'],
+                $staleBefore,
+            ));
+
+            if ((int) $deleted !== 1) {
+                continue;
+            }
+
+            $job = $this->decode((string) $row['payload']);
+
+            if ($job instanceof JobInterface) {
+                $taken[] = ['job' => $job, 'available_at' => (int) $row['available_at']];
+            } else {
+                error_log(sprintf('WP Queue: Dropped unreadable job %s while moving queue %s', $row['job_id'], $queue));
+            }
+        }
+
+        return $taken;
     }
 
     /**

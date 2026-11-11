@@ -11,6 +11,8 @@ use WPQueue\Queue\DatabaseQueue;
 use WPQueue\Queue\MemcachedQueue;
 use WPQueue\Queue\RedisQueue;
 use WPQueue\Queue\SyncQueue;
+use WPQueue\Support\Options;
+use WPQueue\Support\Settings;
 
 if (! defined('ABSPATH')) {
     exit;
@@ -20,7 +22,7 @@ if (! defined('ABSPATH')) {
  * Queue Manager - manages queue connections and drivers.
  *
  * Supported drivers:
- * - database: Uses wp_options (default)
+ * - database: {prefix}queue_jobs table (default)
  * - sync: Synchronous execution (no queue)
  * - redis: Redis server (requires phpredis extension)
  * - memcached: Memcached server (requires memcached extension)
@@ -82,7 +84,7 @@ class QueueManager
      *
      * Priority:
      * 1. Explicitly set driver via setDefaultDriver()
-     * 2. WP_QUEUE_DRIVER constant (with availability check)
+     * 2. WP_QUEUE_DRIVER constant, then the plugin option (admin choice)
      * 3. 'database' as fallback
      *
      * IMPORTANT: If configured driver is not available, falls back to 'database'
@@ -90,32 +92,19 @@ class QueueManager
      */
     public function getDefaultDriver(): string
     {
-        if ($this->defaultDriver !== null) {
-            // Even explicitly set driver must be available
-            if ($this->isDriverReady($this->defaultDriver)) {
-                return $this->defaultDriver;
-            }
+        $driver = $this->defaultDriver ?? Settings::driver()['value'];
 
-            return 'database';
+        if ($driver === 'auto') {
+            return $this->detectBestDriver();
         }
 
-        // Check WP_QUEUE_DRIVER constant
-        if (defined('WP_QUEUE_DRIVER')) {
-            $driver = WP_QUEUE_DRIVER;
-
-            if ($driver === 'auto') {
-                return $this->detectBestDriver();
-            }
-
-            // Validate that configured driver is actually ready
-            if ($this->isDriverReady($driver)) {
-                return $driver;
-            }
-
-            return 'database';
+        if ($driver === 'database' || $driver === 'sync') {
+            return $driver;
         }
 
-        return 'database';
+        // A configured driver that is not available falls back to the database
+        // to prevent fatal errors.
+        return $this->isDriverReady($driver) ? $driver : 'database';
     }
 
     /**
@@ -125,20 +114,63 @@ class QueueManager
      */
     public function getConfiguredDriver(): string
     {
-        if ($this->defaultDriver !== null) {
-            return $this->defaultDriver;
-        }
-
-        if (defined('WP_QUEUE_DRIVER')) {
-            return WP_QUEUE_DRIVER;
-        }
-
-        return 'database';
+        return $this->defaultDriver ?? Settings::driver()['value'];
     }
 
     public function setDefaultDriver(string $driver): void
     {
         $this->defaultDriver = $driver;
+    }
+
+    public const KNOWN_QUEUES_OPTION = 'wp_queue_known_queues';
+
+    /**
+     * Remember a queue name so it is listed in the admin even when empty.
+     */
+    public function rememberQueue(string $queue): void
+    {
+        if ($queue === '') {
+            return;
+        }
+
+        $known = Options::get(self::KNOWN_QUEUES_OPTION, []);
+        $known = is_array($known) ? $known : [];
+
+        if (! in_array($queue, $known, true)) {
+            $known[] = $queue;
+            Options::set(self::KNOWN_QUEUES_OPTION, array_values($known));
+        }
+    }
+
+    /**
+     * Queue names ever used: registry plus queues seen in the job log.
+     *
+     * @return list<string>
+     */
+    public function knownQueues(): array
+    {
+        $known = Options::get(self::KNOWN_QUEUES_OPTION, []);
+        $known = is_array($known) ? array_map('strval', $known) : [];
+
+        global $wpdb;
+
+        if (isset($wpdb) && method_exists($wpdb, 'get_col')) {
+            try {
+                $table = $wpdb->prefix.'queue_logs';
+                $suppress = method_exists($wpdb, 'suppress_errors') ? $wpdb->suppress_errors(true) : false;
+                $logged = (array) $wpdb->get_col("SELECT DISTINCT queue FROM {$table}");
+
+                if (method_exists($wpdb, 'suppress_errors')) {
+                    $wpdb->suppress_errors($suppress);
+                }
+
+                $known = array_merge($known, array_map('strval', $logged));
+            } catch (\Throwable) {
+                // No log table yet.
+            }
+        }
+
+        return array_values(array_unique(array_filter($known, static fn (string $q): bool => $q !== '')));
     }
 
     /**
@@ -189,7 +221,8 @@ class QueueManager
                 'extension' => true,
                 'server' => true,
                 'message' => $driver === 'database'
-                    ? __('Uses wp_options table', 'wp-queue')
+                    /* translators: %s: database table name */
+                    ? sprintf(__('Jobs are stored in the %s table', 'wp-queue'), ($GLOBALS['wpdb']->prefix ?? 'wp_').'queue_jobs')
                     : __('Synchronous execution (no queue)', 'wp-queue'),
             ],
             'redis' => $this->getRedisStatus(),
@@ -519,7 +552,7 @@ class QueueManager
     {
         $drivers = [];
 
-        foreach (['database', 'sync', 'redis', 'memcached'] as $driver) {
+        foreach (Settings::DRIVERS as $driver) {
             $status = $this->getDriverStatus($driver);
             $drivers[$driver] = array_merge($status, [
                 'available' => $status['status'] === self::STATUS_READY,
@@ -591,12 +624,14 @@ class QueueManager
             // Silently ignore discovery errors; default queue will be used.
         }
 
+        $queues = array_merge($queues, $this->knownQueues());
+
         // Always include default queue
         if (! in_array('default', $queues, true)) {
             array_unshift($queues, 'default');
         }
 
-        return array_unique($queues);
+        return array_values(array_unique($queues));
     }
 
     /**

@@ -246,6 +246,29 @@ class PredisClient implements RedisClientInterface
         return array_map(fn ($key) => substr($key, $prefixLen), $keys);
     }
 
+    public function evalScript(string $script, array $keys, array $args = []): mixed
+    {
+        $this->ensureConnected();
+
+        $prefixed = array_map(fn (string $key): string => $this->prefixKey($key), $keys);
+
+        return $this->redis->eval($script, count($prefixed), ...array_merge($prefixed, array_map('strval', $args)));
+    }
+
+    public function sAdd(string $key, string $member): int
+    {
+        $this->ensureConnected();
+
+        return (int) $this->redis->sadd($this->prefixKey($key), [$member]);
+    }
+
+    public function sMembers(string $key): array
+    {
+        $this->ensureConnected();
+
+        return array_values(array_map('strval', $this->redis->smembers($this->prefixKey($key)) ?: []));
+    }
+
     public function getClientType(): string
     {
         return 'predis';

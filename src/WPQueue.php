@@ -6,11 +6,15 @@ namespace WPQueue;
 
 use WPQueue\Admin\AdminPage;
 use WPQueue\Admin\RestApi;
+use WPQueue\Admin\SettingsController;
+use WPQueue\Admin\SystemStatus;
 use WPQueue\Contracts\JobInterface;
 use WPQueue\Jobs\PendingDispatch;
 use WPQueue\Loopback\LoopbackHandler;
-use WPQueue\Runtime\RuntimeMode;
+use WPQueue\Runtime\Runner;
 use WPQueue\Storage\LogStorage;
+use WPQueue\Support\ConfigFile;
+use WPQueue\Support\DriverSwitcher;
 use WPQueue\Support\Lock;
 use WPQueue\Support\Schema;
 
@@ -77,16 +81,16 @@ final class WPQueue
             $instance->scheduler->register();
         });
 
-        // Register cron handler for processing queues
-        add_action('wp_queue_process', static function (string $queue = 'default'): void {
-            self::processQueues($queue, 50, 50);
-        });
+        // Exactly one runner starts workers. Only the WP-Cron runner hooks into
+        // WP-Cron; only the loopback runner answers admin-ajax requests.
+        if (Runner::is(Runner::WP_CRON)) {
+            add_action('wp_queue_process', static function (string $queue = 'default'): void {
+                self::processQueues($queue, 50, 50, Runner::WP_CRON);
+            });
+        }
 
-        // Schedule queue processing (cron / loopback mode). In daemon mode an
-        // external worker (`wp queue work`) polls the queue, so stale WP-Cron
-        // events of the plugin are removed instead.
         add_action('init', static function (): void {
-            if (! RuntimeMode::useCron()) {
+            if (! Runner::is(Runner::WP_CRON)) {
                 self::unscheduleProcessing();
 
                 return;
@@ -100,12 +104,20 @@ final class WPQueue
         // Admin UI
         if (is_admin()) {
             new AdminPage();
+            new SettingsController();
         }
 
-        // Loopback async handler (must be outside is_admin())
-        if (RuntimeMode::useLoopback()) {
+        if (Runner::is(Runner::LOOPBACK)) {
             new LoopbackHandler();
         }
+
+        // Loopback health check (admin-ajax ping; never wp-cron.php).
+        add_action('wp_ajax_nopriv_'.SystemStatus::PING_ACTION, [SystemStatus::class, 'handlePing']);
+        add_action('wp_ajax_'.SystemStatus::PING_ACTION, [SystemStatus::class, 'handlePing']);
+
+        // Verification request after WP Queue edited its wp-config.php block.
+        add_action('wp_ajax_nopriv_'.ConfigFile::PROBE_ACTION, [ConfigFile::class, 'handleProbe']);
+        add_action('wp_ajax_'.ConfigFile::PROBE_ACTION, [ConfigFile::class, 'handleProbe']);
 
         // REST API (must be outside is_admin() for REST requests to work)
         new RestApi();
@@ -144,7 +156,7 @@ final class WPQueue
     public static function install(): void
     {
         // Schedule queue processing
-        if (RuntimeMode::useCron() && ! wp_next_scheduled('wp_queue_process')) {
+        if (Runner::is(Runner::WP_CRON) && ! wp_next_scheduled('wp_queue_process')) {
             wp_schedule_event(time(), 'min', 'wp_queue_process');
         }
 
@@ -156,9 +168,7 @@ final class WPQueue
     public static function uninstall(): void
     {
         // Отключаем крон
-        if (RuntimeMode::useCron()) {
-            wp_clear_scheduled_hook('wp_queue_process');
-        }
+        wp_clear_scheduled_hook('wp_queue_process');
 
         // Удаляем таблицу логов при деактивации
         global $wpdb;
@@ -323,7 +333,7 @@ final class WPQueue
      *
      * @return int|null Jobs processed, or null when another worker holds the lock.
      */
-    public static function processQueues(string $queue = 'default', int $maxJobs = 50, int $maxTime = 50): ?int
+    public static function processQueues(string $queue = 'default', int $maxJobs = 50, int $maxTime = 50, ?string $runner = null): ?int
     {
         $token = Lock::acquire(Lock::WORKER, $maxTime + 60);
 
@@ -335,6 +345,14 @@ final class WPQueue
 
         try {
             $instance = self::getInstance();
+
+            // Jobs pushed with the previous storage driver after a switch.
+            try {
+                (new DriverSwitcher($instance->manager))->drainPrevious();
+            } catch (\Throwable $e) {
+                error_log('WP Queue: moving jobs from the previous driver failed: '.$e->getMessage());
+            }
+
             $instance->worker->setMaxJobs($maxJobs);
             $instance->worker->setMaxTime($maxTime);
             $instance->worker->resetJobsProcessed();
@@ -354,6 +372,10 @@ final class WPQueue
             }
 
             $processed = $instance->worker->getJobsProcessed();
+
+            if ($runner !== null) {
+                Runner::beat($runner, $processed);
+            }
 
             if ($processed > 0) {
                 error_log('WP Queue: Processing completed. Jobs processed: '.$processed);

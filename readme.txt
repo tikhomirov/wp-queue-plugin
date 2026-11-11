@@ -5,7 +5,7 @@ Tags: queue, cron, background-processing, jobs, scheduler
 Requires at least: 6.2
 Tested up to: 7.0
 Requires PHP: 8.3
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -89,6 +89,7 @@ wp queue cron resume <hook>  # Resume a paused event
 
 # System commands
 wp queue system              # Show system status
+wp queue config              # Show/set storage driver and runner
 `
 
 == Installation ==
@@ -147,6 +148,18 @@ Yes, WP Queue works with WordPress multisite installations.
 
 == Changelog ==
 
+= 1.4.0 =
+* Storage backend (Database / Redis / Memcached) and queue runner are chosen in the admin; `sync` moved from drivers to runners
+* Four runners: daemon / system cron, loopback (admin-ajax, like Action Scheduler), WP-Cron, synchronous. Default "Auto" picks the fastest available one and shows why; exactly one runner is active, the others register no hooks and send no requests
+* "Make active" button for every ready backend: waiting jobs are moved to the new backend under the worker lock, nothing is lost or run twice
+* Settings can live in a `// BEGIN WP Queue` block of wp-config.php, edited atomically by the plugin (backup, syntax check, WordPress load check, automatic rollback; a snippet is shown when the file is read-only). Other `WP_QUEUE_*` constants in wp-config.php lock the setting
+* Redis driver rewritten with Lua scripts: atomic claim, delayed and reserved sets, recovery of jobs from crashed workers; works with phpredis and Predis (Redis Object Cache)
+* Status page: runner switcher, crontab line and heartbeat for the daemon, WP-Cron / loopback rows show whether the selected runner uses them
+* Loopback check uses admin-ajax.php and no longer requests wp-cron.php
+* All known queues are listed, including empty ones
+* `wp queue config [--driver=<driver>] [--runner=<runner>] [--store=<option|wp-config>]`
+* New constants: `WP_QUEUE_DRIVER`, `WP_QUEUE_RUNNER` (`WP_QUEUE_RUNTIME_MODE` still works)
+
 = 1.3.0 =
 * Database driver stores jobs in its own table (`{prefix}queue_jobs`) instead of one wp_options array: a job is claimed with an atomic conditional UPDATE, so parallel workers no longer lose or repeat jobs (also with a persistent object cache such as Redis)
 * Jobs left in wp_options by 1.2.x are migrated automatically
@@ -189,6 +202,9 @@ Yes, WP Queue works with WordPress multisite installations.
 * Russian localization
 
 == Upgrade Notice ==
+
+= 1.4.0 =
+Storage backend and queue runner are now selectable in the admin. Existing WP_QUEUE_RUNTIME_MODE / WP_QUEUE_LOOPBACK constants keep working; remove them from wp-config.php to manage the settings in the admin.
 
 = 1.3.0 =
 Database driver moves jobs to its own table with atomic claiming (no lost or duplicated jobs under parallel workers). Pending 1.2.x jobs are migrated automatically.

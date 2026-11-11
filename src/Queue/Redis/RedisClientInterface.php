@@ -141,4 +141,19 @@ interface RedisClientInterface
      * Get client type identifier.
      */
     public function getClientType(): string;
+
+    /**
+     * Run a Lua script atomically. Keys are prefixed like every other command.
+     *
+     * @param  list<string>  $keys
+     * @param  list<string|int|float>  $args
+     */
+    public function evalScript(string $script, array $keys, array $args = []): mixed;
+
+    public function sAdd(string $key, string $member): int;
+
+    /**
+     * @return list<string>
+     */
+    public function sMembers(string $key): array;
 }

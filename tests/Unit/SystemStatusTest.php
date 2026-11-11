@@ -12,6 +12,8 @@ beforeEach(function (): void {
         'site_url' => fn () => 'http://example.com/wp-cron.php',
         'wp_remote_post' => fn () => ['response' => ['code' => 200]],
         'wp_remote_retrieve_response_code' => fn ($response) => $response['response']['code'] ?? 0,
+        'wp_remote_retrieve_body' => fn () => 'wp-queue-pong',
+        'admin_url' => fn ($path = '') => 'http://example.com/wp-admin/'.$path,
         'is_wp_error' => fn ($thing) => false,
         'get_option' => fn ($key, $default = false) => $default,
         'size_format' => fn ($bytes) => round($bytes / 1024 / 1024, 2).' MB',
@@ -84,6 +86,25 @@ describe('SystemStatus', function (): void {
         $loopback = $status->checkLoopback();
 
         expect($loopback['status'])->toBe('ok');
+    });
+
+    it('never requests wp-cron.php for the loopback check', function (): void {
+        $requested = null;
+
+        Brain\Monkey\Functions\stubs([
+            'apply_filters' => fn ($filter, $value) => $value,
+            'wp_remote_post' => function ($url, $args) use (&$requested) {
+                $requested = [$url, $args['body']];
+
+                return ['response' => ['code' => 200]];
+            },
+        ]);
+
+        (new SystemStatus())->checkLoopback();
+
+        expect($requested[0])->toContain('admin-ajax.php')
+            ->and($requested[0])->not->toContain('wp-cron.php')
+            ->and($requested[1])->toBe(['action' => SystemStatus::PING_ACTION]);
     });
 
     it('detects unexpected response code as warning', function (): void {

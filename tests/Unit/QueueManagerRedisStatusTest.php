@@ -86,7 +86,9 @@ describe('QueueManager Redis Status', function (): void {
         $manager = new QueueManager();
         $drivers = $manager->getAvailableDrivers();
 
-        expect($drivers)->toHaveKeys(['database', 'sync', 'redis', 'memcached']);
+        // Sync is a runner now, not a storage backend.
+        expect($drivers)->toHaveKeys(['database', 'redis', 'memcached'])
+            ->and($drivers)->not->toHaveKey('sync');
 
         foreach ($drivers as $name => $info) {
             expect($info)->toHaveKeys(['status', 'extension', 'server', 'message', 'available']);

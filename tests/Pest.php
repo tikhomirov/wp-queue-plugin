@@ -22,6 +22,21 @@ uses()
     ->beforeEach(function (): void {
         $GLOBALS['wpdb'] = new \WPQueue\Tests\Support\SqliteWpdb();
         \WPQueue\Support\Schema::markReady();
+        \WPQueue\Support\Options::useMemory();
+        \Brain\Monkey\Functions\stubTranslationFunctions();
+        \WPQueue\Support\Settings::$constantReader = static fn (string $name): mixed => null;
+        \WPQueue\Support\ConfigFile::$path = null;
+        \WPQueue\Support\ConfigFile::$verifier = null;
+        \WPQueue\Support\ConfigFile::resetCache();
+        \WPQueue\Runtime\Runner::reset();
+        \WPQueue\Runtime\Trigger::reset();
+    })
+    ->afterEach(function (): void {
+        \WPQueue\Support\Options::useWordPress();
+        \WPQueue\Support\Settings::$constantReader = null;
+        \WPQueue\Runtime\Runner::reset();
+        \WPQueue\Runtime\Trigger::reset();
+        \WPQueue\Support\ConfigFile::resetCache();
     })
     ->in('Unit');
 
