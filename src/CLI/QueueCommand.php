@@ -466,7 +466,7 @@ class QueueCommand
      */
     protected function convertToMB(string $value): int
     {
-        $value = mb_strtoupper(mb_trim($value));
+        $value = mb_strtoupper(trim($value));
         $multiplier = 1;
 
         if (str_ends_with($value, 'G')) {

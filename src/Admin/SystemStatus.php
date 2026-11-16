@@ -145,7 +145,7 @@ class SystemStatus
 
         $code = wp_remote_retrieve_response_code($response);
 
-        if ($code === 200 && mb_trim((string) wp_remote_retrieve_body($response)) !== 'wp-queue-pong') {
+        if ($code === 200 && trim((string) wp_remote_retrieve_body($response)) !== 'wp-queue-pong') {
             return [
                 'status'  => 'warning',
                 'message' => __('admin-ajax.php answered, but not with the WP Queue ping response', 'wp-queue'),
@@ -307,7 +307,7 @@ class SystemStatus
      */
     protected function convertToBytes(string $value): int
     {
-        $value = mb_trim($value);
+        $value = trim($value);
 
         if ($value === '-1') {
             return PHP_INT_MAX;
