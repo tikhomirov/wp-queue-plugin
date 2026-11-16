@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace WPQueue\Loopback;
 
-use WPQueue\Runtime\RuntimeMode;
+use WPQueue\Runtime\Runner;
 use WPQueue\WPQueue;
 
 if (! defined('ABSPATH')) {
@@ -74,8 +74,8 @@ final class LoopbackDispatcher
     {
         $args = [
             'action' => 'wp_queue_loopback',
-            'queue' => self::sanitizeQueue($queue),
-            'nonce' => wp_create_nonce(self::nonceAction($queue)),
+            'queue'  => self::sanitizeQueue($queue),
+            'nonce'  => wp_create_nonce(self::nonceAction($queue)),
         ];
 
         $url = add_query_arg($args, admin_url('admin-ajax.php'));
@@ -83,8 +83,8 @@ final class LoopbackDispatcher
         /**
          * Filters the loopback URL used to trigger immediate queue processing.
          *
-         * @param  string  $url  The loopback URL.
-         * @param  string  $queue  Queue name.
+         * @param string $url   The loopback URL.
+         * @param string $queue Queue name.
          */
         return apply_filters('wp_queue_loopback_url', $url, $queue);
     }
@@ -95,11 +95,11 @@ final class LoopbackDispatcher
     public static function buildPostArgs(): array
     {
         $args = [
-            'timeout' => 0.01,
-            'blocking' => false,
+            'timeout'   => 0.01,
+            'blocking'  => false,
             'sslverify' => apply_filters('https_local_ssl_verify', false),
-            'cookies' => $_COOKIE,
-            'headers' => [
+            'cookies'   => $_COOKIE,
+            'headers'   => [
                 'Referer' => home_url(),
             ],
         ];
@@ -107,7 +107,7 @@ final class LoopbackDispatcher
         /**
          * Filters the POST arguments used for the loopback request.
          *
-         * @param  array  $args
+         * @param array $args
          */
         return apply_filters('wp_queue_loopback_post_args', $args);
     }
@@ -117,7 +117,7 @@ final class LoopbackDispatcher
      */
     public static function nonceAction(string $queue): string
     {
-        return 'wp_queue_loopback_'.$queue;
+        return 'wp_queue_loopback_' . $queue;
     }
 
     /**
@@ -137,19 +137,19 @@ final class LoopbackDispatcher
      */
     public static function isEnabled(): bool
     {
-        if (defined('WP_QUEUE_LOOPBACK')) {
-            return (bool) WP_QUEUE_LOOPBACK;
-        }
-
-        if (! RuntimeMode::useLoopback()) {
+        // Only the active runner may start workers.
+        if (! Runner::is(Runner::LOOPBACK)) {
             return false;
         }
 
-        /**
-         * Filters whether loopback dispatch is enabled.
-         *
-         * @param  bool  $enabled  Default true.
-         */
-        return apply_filters('wp_queue_loopback_enabled', true);
+        return (bool) apply_filters('wp_queue_loopback_enabled', true);
+    }
+
+    /**
+     * Allow spawning again in this request (after a worker finished).
+     */
+    public static function forget(string $queue): void
+    {
+        unset(self::$spawned[self::sanitizeQueue($queue)]);
     }
 }

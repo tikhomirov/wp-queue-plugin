@@ -45,7 +45,7 @@ class Dispatcher
     /**
      * Chain multiple jobs.
      *
-     * @param  JobInterface[]  $jobs
+     * @param JobInterface[] $jobs
      */
     public function chain(array $jobs): PendingChain
     {
@@ -55,7 +55,7 @@ class Dispatcher
     /**
      * Batch multiple jobs.
      *
-     * @param  JobInterface[]  $jobs
+     * @param JobInterface[] $jobs
      */
     public function batch(array $jobs): PendingBatch
     {

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace WPQueue;
 
-use Throwable;
 use WPQueue\Contracts\JobInterface;
 use WPQueue\Events\JobFailed;
 use WPQueue\Events\JobProcessed;
@@ -73,18 +72,18 @@ class Worker
      */
     protected function convertToMB(string $value): int
     {
-        $value = strtoupper(trim($value));
+        $value = mb_strtoupper(mb_trim($value));
         $multiplier = 1;
 
         if (str_ends_with($value, 'G')) {
             $multiplier = 1024 * 1024 * 1024;
-            $value = substr($value, 0, -1);
+            $value = mb_substr($value, 0, -1);
         } elseif (str_ends_with($value, 'M')) {
             $multiplier = 1024 * 1024;
-            $value = substr($value, 0, -1);
+            $value = mb_substr($value, 0, -1);
         } elseif (str_ends_with($value, 'K')) {
             $multiplier = 1024;
-            $value = substr($value, 0, -1);
+            $value = mb_substr($value, 0, -1);
         }
 
         $bytes = (int) $value * $multiplier;
@@ -130,7 +129,7 @@ class Worker
             return false;
         }
 
-        error_log("WP Queue: Processing job from queue '{$queue}': ".get_class($job));
+        error_log("WP Queue: Processing job from queue '{$queue}': " . get_class($job));
 
         return $this->process($job, $queue);
     }
@@ -156,7 +155,7 @@ class Worker
             $this->checkMemoryAfterJob($job, $queue);
 
             return true;
-        } catch (Throwable $e) {
+        } catch (\Throwable $e) {
             return $this->handleJobException($job, $queue, $e);
         }
     }
@@ -186,7 +185,7 @@ class Worker
     /**
      * Handle an exception that occurred while the job was running.
      */
-    protected function handleJobException(JobInterface $job, string $queue, Throwable $e): bool
+    protected function handleJobException(JobInterface $job, string $queue, \Throwable $e): bool
     {
         $this->log('failed', $job, $e->getMessage());
 
@@ -199,7 +198,7 @@ class Worker
 
         try {
             $job->failed($e);
-        } catch (Throwable) {
+        } catch (\Throwable) {
             // Ignore exceptions in failed handler
         }
 
@@ -331,6 +330,14 @@ class Worker
         return $this->memoryLimit;
     }
 
+    /**
+     * Reset the processed-jobs counter (the shared worker instance is reused per request).
+     */
+    public function resetJobsProcessed(): void
+    {
+        $this->jobsProcessed = 0;
+    }
+
     public function getJobsProcessed(): int
     {
         return $this->jobsProcessed;
@@ -364,14 +371,14 @@ class Worker
         }
     }
 
-    protected function raiseFailedJobEvent(JobInterface $job, string $queue, Throwable $e): void
+    protected function raiseFailedJobEvent(JobInterface $job, string $queue, \Throwable $e): void
     {
         if (function_exists('do_action')) {
             do_action('wp_queue_job_failed', new JobFailed($job, $queue, $e));
         }
     }
 
-    protected function raiseRetryingEvent(JobInterface $job, string $queue, Throwable $e): void
+    protected function raiseRetryingEvent(JobInterface $job, string $queue, \Throwable $e): void
     {
         if (function_exists('do_action')) {
             do_action('wp_queue_job_retrying', new JobRetrying($job, $queue, $job->getAttempts(), $e));

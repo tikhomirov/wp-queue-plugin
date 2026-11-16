@@ -6,11 +6,17 @@ namespace WPQueue;
 
 use WPQueue\Admin\AdminPage;
 use WPQueue\Admin\RestApi;
+use WPQueue\Admin\SettingsController;
+use WPQueue\Admin\SystemStatus;
 use WPQueue\Contracts\JobInterface;
 use WPQueue\Jobs\PendingDispatch;
 use WPQueue\Loopback\LoopbackHandler;
-use WPQueue\Runtime\RuntimeMode;
+use WPQueue\Runtime\Runner;
 use WPQueue\Storage\LogStorage;
+use WPQueue\Support\ConfigFile;
+use WPQueue\Support\DriverSwitcher;
+use WPQueue\Support\Lock;
+use WPQueue\Support\Schema;
 
 if (! defined('ABSPATH')) {
     exit;
@@ -20,10 +26,10 @@ if (! defined('ABSPATH')) {
  * Main facade for WP Queue.
  *
  * @method static PendingDispatch dispatch(JobInterface $job)
- * @method static void dispatchSync(JobInterface $job)
- * @method static void dispatchNow(JobInterface $job)
- * @method static PendingChain chain(array $jobs)
- * @method static PendingBatch batch(array $jobs)
+ * @method static void            dispatchSync(JobInterface $job)
+ * @method static void            dispatchNow(JobInterface $job)
+ * @method static PendingChain    chain(array $jobs)
+ * @method static PendingBatch    batch(array $jobs)
  */
 final class WPQueue
 {
@@ -75,52 +81,18 @@ final class WPQueue
             $instance->scheduler->register();
         });
 
-        // Register cron handler for processing queues
-        add_action('wp_queue_process', static function (string $queue = 'default'): void {
-            error_log('WP Queue: Processing started for queue: '.$queue);
+        // Exactly one runner starts workers. Only the WP-Cron runner hooks into
+        // WP-Cron; only the loopback runner answers admin-ajax requests.
+        if (Runner::is(Runner::WP_CRON)) {
+            add_action('wp_queue_process', static function (string $queue = 'default'): void {
+                self::processQueues($queue, 50, 50, Runner::WP_CRON);
+            });
+        }
 
-            if (self::isProcessing($queue)) {
-                error_log('WP Queue: Processing already running for queue: '.$queue);
-
-                return;
-            }
-
-            $lockKey = 'wp_queue_lock_'.$queue;
-            $lockTtl = 120;
-
-            set_site_transient($lockKey, 1, $lockTtl);
-
-            $instance = self::getInstance();
-            $instance->worker->setMaxJobs(50);
-            $instance->worker->setMaxTime(50);
-
-            // Discover all queues from the current driver
-            $queues = $instance->manager->discoverQueues();
-
-            // Ensure default queue is always processed
-            if (! in_array($queue, $queues, true)) {
-                array_unshift($queues, $queue);
-            }
-
-            // Process each discovered queue until worker reaches its limits
-            foreach ($queues as $queueName) {
-                while (! $instance->worker->shouldStop()) {
-                    if (! $instance->worker->runNextJob($queueName)) {
-                        break;
-                    }
-                }
-            }
-
-            try {
-                error_log('WP Queue: Processing completed. Jobs processed: '.$instance->worker->getJobsProcessed());
-            } finally {
-                delete_site_transient($lockKey);
-            }
-        });
-
-        // Schedule queue processing
         add_action('init', static function (): void {
-            if (! RuntimeMode::useCron()) {
+            if (! Runner::is(Runner::WP_CRON)) {
+                self::unscheduleProcessing();
+
                 return;
             }
 
@@ -132,12 +104,20 @@ final class WPQueue
         // Admin UI
         if (is_admin()) {
             new AdminPage();
+            new SettingsController();
         }
 
-        // Loopback async handler (must be outside is_admin())
-        if (RuntimeMode::useLoopback()) {
+        if (Runner::is(Runner::LOOPBACK)) {
             new LoopbackHandler();
         }
+
+        // Loopback health check (admin-ajax ping; never wp-cron.php).
+        add_action('wp_ajax_nopriv_' . SystemStatus::PING_ACTION, [SystemStatus::class, 'handlePing']);
+        add_action('wp_ajax_' . SystemStatus::PING_ACTION, [SystemStatus::class, 'handlePing']);
+
+        // Verification request after WP Queue edited its wp-config.php block.
+        add_action('wp_ajax_nopriv_' . ConfigFile::PROBE_ACTION, [ConfigFile::class, 'handleProbe']);
+        add_action('wp_ajax_' . ConfigFile::PROBE_ACTION, [ConfigFile::class, 'handleProbe']);
 
         // REST API (must be outside is_admin() for REST requests to work)
         new RestApi();
@@ -176,25 +156,24 @@ final class WPQueue
     public static function install(): void
     {
         // Schedule queue processing
-        if (RuntimeMode::useCron() && ! wp_next_scheduled('wp_queue_process')) {
+        if (Runner::is(Runner::WP_CRON) && ! wp_next_scheduled('wp_queue_process')) {
             wp_schedule_event(time(), 'min', 'wp_queue_process');
         }
 
         self::createLogsTable();
         self::migrateLogsOption();
+        Schema::install();
     }
 
     public static function uninstall(): void
     {
         // Отключаем крон
-        if (RuntimeMode::useCron()) {
-            wp_clear_scheduled_hook('wp_queue_process');
-        }
+        wp_clear_scheduled_hook('wp_queue_process');
 
         // Удаляем таблицу логов при деактивации
         global $wpdb;
 
-        $table = $wpdb->prefix.'queue_logs';
+        $table = $wpdb->prefix . 'queue_logs';
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange
         $wpdb->query($wpdb->prepare('DROP TABLE IF EXISTS %i', $table));
     }
@@ -203,7 +182,7 @@ final class WPQueue
     {
         global $wpdb;
 
-        $table = $wpdb->prefix.'queue_logs';
+        $table = $wpdb->prefix . 'queue_logs';
         $charsetCollate = $wpdb->get_charset_collate();
 
         $sql = "CREATE TABLE IF NOT EXISTS {$table} (
@@ -235,18 +214,18 @@ final class WPQueue
         }
 
         global $wpdb;
-        $table = $wpdb->prefix.'queue_logs';
+        $table = $wpdb->prefix . 'queue_logs';
 
         foreach ($logs as $log) {
             $wpdb->insert(
                 $table,
                 [
-                    'job_id' => isset($log['job_id']) ? (string) $log['job_id'] : '',
-                    'job_class' => isset($log['job_class']) ? (string) $log['job_class'] : '',
-                    'queue' => isset($log['queue']) ? (string) $log['queue'] : 'default',
-                    'status' => isset($log['status']) ? (string) $log['status'] : 'completed',
-                    'message' => $log['message'] ?? null,
-                    'attempts' => isset($log['attempts']) ? (int) $log['attempts'] : 0,
+                    'job_id'     => isset($log['job_id']) ? (string) $log['job_id'] : '',
+                    'job_class'  => isset($log['job_class']) ? (string) $log['job_class'] : '',
+                    'queue'      => isset($log['queue']) ? (string) $log['queue'] : 'default',
+                    'status'     => isset($log['status']) ? (string) $log['status'] : 'completed',
+                    'message'    => $log['message'] ?? null,
+                    'attempts'   => isset($log['attempts']) ? (int) $log['attempts'] : 0,
                     'created_at' => isset($log['timestamp']) ? gmdate('Y-m-d H:i:s', (int) $log['timestamp']) : gmdate('Y-m-d H:i:s'),
                 ],
                 [
@@ -291,7 +270,7 @@ final class WPQueue
     /**
      * Chain multiple jobs.
      *
-     * @param  JobInterface[]  $jobs
+     * @param JobInterface[] $jobs
      */
     public static function chain(array $jobs): PendingChain
     {
@@ -301,7 +280,7 @@ final class WPQueue
     /**
      * Batch multiple jobs.
      *
-     * @param  JobInterface[]  $jobs
+     * @param JobInterface[] $jobs
      */
     public static function batch(array $jobs): PendingBatch
     {
@@ -345,7 +324,85 @@ final class WPQueue
      */
     public static function isProcessing(string $queue = 'default'): bool
     {
-        return (bool) get_site_transient('wp_queue_lock_'.$queue);
+        // One worker lock for all queues: a worker drains every queue.
+        return Lock::isHeld(Lock::WORKER);
+    }
+
+    /**
+     * Process all known queues under the global worker lock.
+     *
+     * @return int|null Jobs processed, or null when another worker holds the lock.
+     */
+    public static function processQueues(string $queue = 'default', int $maxJobs = 50, int $maxTime = 50, ?string $runner = null): ?int
+    {
+        $token = Lock::acquire(Lock::WORKER, $maxTime + 60);
+
+        if ($token === null) {
+            error_log('WP Queue: Processing already running, skipped for queue: ' . $queue);
+
+            return null;
+        }
+
+        try {
+            $instance = self::getInstance();
+
+            // Jobs pushed with the previous storage driver after a switch.
+            try {
+                (new DriverSwitcher($instance->manager))->drainPrevious();
+            } catch (\Throwable $e) {
+                error_log('WP Queue: moving jobs from the previous driver failed: ' . $e->getMessage());
+            }
+
+            $instance->worker->setMaxJobs($maxJobs);
+            $instance->worker->setMaxTime($maxTime);
+            $instance->worker->resetJobsProcessed();
+
+            $queues = $instance->manager->discoverQueues();
+
+            if (! in_array($queue, $queues, true)) {
+                array_unshift($queues, $queue);
+            }
+
+            foreach ($queues as $queueName) {
+                while (! $instance->worker->shouldStop()) {
+                    if (! $instance->worker->runNextJob($queueName)) {
+                        break;
+                    }
+                }
+            }
+
+            $processed = $instance->worker->getJobsProcessed();
+
+            if ($runner !== null) {
+                Runner::beat($runner, $processed);
+            }
+
+            if ($processed > 0) {
+                error_log('WP Queue: Processing completed. Jobs processed: ' . $processed);
+            }
+
+            return $processed;
+        } finally {
+            Lock::release(Lock::WORKER, $token);
+        }
+    }
+
+    /**
+     * Remove every scheduled wp_queue_process event (with or without args).
+     */
+    public static function unscheduleProcessing(): void
+    {
+        if (! function_exists('_get_cron_array') || ! function_exists('wp_unschedule_hook')) {
+            return;
+        }
+
+        foreach ((array) _get_cron_array() as $hooks) {
+            if (isset($hooks['wp_queue_process'])) {
+                wp_unschedule_hook('wp_queue_process');
+
+                return;
+            }
+        }
     }
 
     /**
@@ -361,7 +418,7 @@ final class WPQueue
      */
     public static function pause(string $queue = 'default'): void
     {
-        update_site_option('wp_queue_status_'.$queue, 'paused');
+        update_site_option('wp_queue_status_' . $queue, 'paused');
     }
 
     /**
@@ -369,7 +426,7 @@ final class WPQueue
      */
     public static function resume(string $queue = 'default'): void
     {
-        delete_site_option('wp_queue_status_'.$queue);
+        delete_site_option('wp_queue_status_' . $queue);
     }
 
     /**
@@ -377,7 +434,7 @@ final class WPQueue
      */
     public static function isPaused(string $queue = 'default'): bool
     {
-        return get_site_option('wp_queue_status_'.$queue) === 'paused';
+        return get_site_option('wp_queue_status_' . $queue) === 'paused';
     }
 
     /**

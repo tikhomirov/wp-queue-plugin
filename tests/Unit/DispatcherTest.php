@@ -27,7 +27,7 @@ beforeEach(function (): void {
     DispatchableJob::$dispatched = false;
 
     Brain\Monkey\Functions\stubs([
-        'get_site_option' => fn () => [],
+        'get_site_option'    => fn () => [],
         'update_site_option' => fn () => true,
         'delete_site_option' => fn () => true,
     ]);
@@ -79,7 +79,7 @@ describe('Dispatcher', function (): void {
 describe('PendingDispatch', function (): void {
     it('sends job on destruct', function (): void {
         Brain\Monkey\Functions\stubs([
-            'get_site_option' => fn () => [],
+            'get_site_option'    => fn () => [],
             'update_site_option' => fn () => true,
         ]);
 

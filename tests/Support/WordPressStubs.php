@@ -93,7 +93,7 @@ class FakeWpdb
             $rows = array_values(array_filter($rows, fn ($row) => ($row['status'] ?? null) === $status));
         }
 
-        $lower = strtolower($query);
+        $lower = mb_strtolower($query);
         if (str_contains($lower, 'order by created_at desc')) {
             usort($rows, fn ($a, $b) => strcmp($b['created_at'] ?? '', $a['created_at'] ?? ''));
         } elseif (str_contains($lower, 'order by created_at asc')) {
@@ -102,9 +102,9 @@ class FakeWpdb
 
         if (str_contains($lower, 'select queue') && str_contains($lower, 'job_class')) {
             return array_map(static fn ($row) => [
-                'queue' => $row['queue'] ?? '',
+                'queue'     => $row['queue'] ?? '',
                 'job_class' => $row['job_class'] ?? '',
-                'status' => $row['status'] ?? '',
+                'status'    => $row['status'] ?? '',
             ], $rows);
         }
 
@@ -199,7 +199,7 @@ class FakeWpdb
 
     private function matchesLike(string $subject, string $pattern): bool
     {
-        $regex = '/^'.str_replace(['%', '_'], ['.*', '.'], preg_quote($pattern, '/')).'$/i';
+        $regex = '/^' . str_replace(['%', '_'], ['.*', '.'], preg_quote($pattern, '/')) . '$/i';
 
         return (bool) preg_match($regex, $subject);
     }
@@ -277,7 +277,7 @@ if (! function_exists('esc_html__')) {
 if (! function_exists('size_format')) {
     function size_format(int $bytes): string
     {
-        return number_format($bytes / 1024 / 1024, 2).' MB';
+        return number_format($bytes / 1024 / 1024, 2) . ' MB';
     }
 }
 
@@ -298,7 +298,7 @@ if (! function_exists('site_url')) {
 if (! function_exists('admin_url')) {
     function admin_url(string $path = ''): string
     {
-        return 'https://example.com/wp-admin/'.ltrim($path, '/');
+        return 'https://example.com/wp-admin/' . mb_ltrim($path, '/');
     }
 }
 
@@ -328,7 +328,7 @@ if (! function_exists('human_time_diff')) {
     {
         $diff = abs($to - $from);
 
-        return $diff.' seconds';
+        return $diff . ' seconds';
     }
 }
 
@@ -404,7 +404,7 @@ if (! function_exists('set_site_transient')) {
     function set_site_transient(string $key, mixed $value, int $expiration = 0): bool
     {
         $GLOBALS['wp_site_transients_store'][$key] = [
-            'value' => $value,
+            'value'   => $value,
             'expires' => $expiration > 0 ? time() + $expiration : 0,
         ];
 
@@ -492,14 +492,14 @@ if (! function_exists('is_admin')) {
 if (! function_exists('plugin_dir_path')) {
     function plugin_dir_path(string $file): string
     {
-        return dirname($file).'/';
+        return dirname($file) . '/';
     }
 }
 
 if (! function_exists('plugin_dir_url')) {
     function plugin_dir_url(string $file): string
     {
-        return 'https://example.com/'.basename(dirname($file)).'/';
+        return 'https://example.com/' . basename(dirname($file)) . '/';
     }
 }
 
@@ -549,7 +549,7 @@ if (! function_exists('wp_schedule_event')) {
         $GLOBALS['wp_cron_store'][$timestamp][$hook][$sig] = [
             'schedule' => $schedule,
             'interval' => wp_get_schedules()[$schedule]['interval'] ?? 0,
-            'args' => $args,
+            'args'     => $args,
         ];
 
         return true;
@@ -563,7 +563,7 @@ if (! function_exists('wp_schedule_single_event')) {
         $GLOBALS['wp_cron_store'][$timestamp][$hook][$sig] = [
             'schedule' => false,
             'interval' => null,
-            'args' => $args,
+            'args'     => $args,
         ];
 
         return true;
@@ -606,10 +606,10 @@ if (! function_exists('wp_get_schedules')) {
     function wp_get_schedules(): array
     {
         return [
-            'hourly' => ['interval' => HOUR_IN_SECONDS, 'display' => 'Hourly'],
+            'hourly'     => ['interval' => HOUR_IN_SECONDS, 'display' => 'Hourly'],
             'twicedaily' => ['interval' => 12 * HOUR_IN_SECONDS, 'display' => 'Twice Daily'],
-            'daily' => ['interval' => DAY_IN_SECONDS, 'display' => 'Daily'],
-            'min' => ['interval' => MINUTE_IN_SECONDS, 'display' => 'Every Minute'],
+            'daily'      => ['interval' => DAY_IN_SECONDS, 'display' => 'Daily'],
+            'min'        => ['interval' => MINUTE_IN_SECONDS, 'display' => 'Every Minute'],
         ];
     }
 }
@@ -621,10 +621,10 @@ if (! function_exists('wp_get_scheduled_event')) {
             if (isset($hooks[$hook])) {
                 foreach ($hooks[$hook] as $event) {
                     return [
-                        'hook' => $hook,
+                        'hook'      => $hook,
                         'timestamp' => (int) $timestamp,
-                        'schedule' => $event['schedule'],
-                        'args' => $event['args'],
+                        'schedule'  => $event['schedule'],
+                        'args'      => $event['args'],
                     ];
                 }
             }
@@ -650,7 +650,7 @@ if (! class_exists('WP_REST_Request')) {
 
         public function get_method(): string
         {
-            return strtoupper($this->method);
+            return mb_strtoupper($this->method);
         }
 
         public function get_route(): string
@@ -711,12 +711,12 @@ if (! function_exists('register_rest_route')) {
     {
         $methods = $args['methods'] ?? 'GET';
         $methods = is_array($methods) ? $methods : explode('|', $methods);
-        $pattern = '#^/'.trim($namespace, '/').$route.'$#';
+        $pattern = '#^/' . mb_trim($namespace, '/') . $route . '$#';
 
         $GLOBALS['wp_rest_routes'][] = [
-            'pattern' => $pattern,
-            'methods' => array_map('strtoupper', $methods),
-            'callback' => $args['callback'],
+            'pattern'             => $pattern,
+            'methods'             => array_map('strtoupper', $methods),
+            'callback'            => $args['callback'],
             'permission_callback' => $args['permission_callback'] ?? null,
         ];
     }
@@ -752,7 +752,7 @@ if (! function_exists('rest_do_request')) {
                 $allowed = call_user_func($permission, $request);
                 if ($allowed instanceof WP_Error) {
                     return new WP_REST_Response([
-                        'code' => $allowed->get_error_code(),
+                        'code'    => $allowed->get_error_code(),
                         'message' => $allowed->get_error_message(),
                     ], $allowed->get_error_data()['status'] ?? 403);
                 }
@@ -772,7 +772,7 @@ if (! function_exists('rest_do_request')) {
 
             if ($response instanceof WP_Error) {
                 return new WP_REST_Response([
-                    'code' => $response->get_error_code(),
+                    'code'    => $response->get_error_code(),
                     'message' => $response->get_error_message(),
                 ], $response->get_error_data()['status'] ?? 500);
             }

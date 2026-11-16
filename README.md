@@ -32,7 +32,7 @@
 ## Features
 
 - 🚀 **Laravel-style API** — Clean, fluent job dispatching with PHP 8 attributes
-- 📦 **Multiple Drivers** — Database, Redis, Memcached, Sync (auto-detection)
+- 📦 **Multiple Drivers** — Database, Redis, Memcached; runner (daemon, loopback, WP-Cron, sync) chosen in the admin or picked automatically
 - 🔄 **Auto Retries** — Exponential backoff for failed jobs
 - ⏰ **Scheduling** — Cron-like job scheduling
 - 👁️ **WP-Cron Monitor** — View, run, pause, resume, edit cron events
@@ -288,25 +288,37 @@ POST   /wp-json/wp-queue/v1/cron/delete
 GET    /wp-json/wp-queue/v1/system
 ```
 
-## Queue Drivers
+## Queue Drivers and Runners
 
-WP Queue supports multiple storage backends:
+Two independent settings, both chosen in **Queues → Drivers** and **System → Status** (or with `wp queue config`):
+
+* **Storage driver** — where jobs are kept.
+* **Runner** — what executes them. Exactly one runner is active; the others register no hooks and send no requests.
 
 | Driver | Description | Requirements |
 |--------|-------------|-------------|
-| `database` | Uses wp_options table (default) | None |
-| `redis` | Redis server | phpredis extension |
-| `memcached` | Memcached server | memcached extension |
-| `sync` | Synchronous execution | None |
-| `auto` | Auto-detect best available | None |
+| `database` | `{prefix}queue_jobs` table, atomic claim (default) | None |
+| `redis` | Lua scripts: atomic claim, delayed/reserved sets, crash recovery | phpredis or Predis (Redis Object Cache) |
+| `memcached` | Not recommended: jobs can't be listed or moved | memcached extension |
+
+| Runner | How jobs start |
+|--------|----------------|
+| `auto` (default) | Fastest available: `daemon` if its heartbeat is fresh (< 10 min), else `loopback`, `wp_cron`, `sync`. The admin shows the actual runner and why |
+| `daemon` | System cron or a daemon runs `wp queue work --all` (crontab line and heartbeat are shown in the admin) |
+| `loopback` | Non-blocking POST to `admin-ajax.php` after dispatch (like Action Scheduler) |
+| `wp_cron` | `wp_queue_process` WP-Cron event |
+| `sync` | At the end of the request that dispatched the job |
+
+Switching the driver with **Make active** moves waiting jobs (ready and delayed) to the new backend under the global worker lock; it is refused while jobs are being executed.
 
 ### Configuration
 
-Add to `wp-config.php`:
+Precedence: constant in `wp-config.php` → plugin option → default.
 
 ```php
-// Select queue driver
-define('WP_QUEUE_DRIVER', 'redis'); // or 'memcached', 'database', 'sync', 'auto'
+define('WP_QUEUE_DRIVER', 'redis');   // database | redis | memcached
+define('WP_QUEUE_RUNNER', 'daemon');  // auto | daemon | loopback | wp_cron | sync
+// Legacy, still honoured: WP_QUEUE_RUNTIME_MODE ('daemon' | 'cron_loopback'), WP_QUEUE_LOOPBACK (false disables loopback)
 
 // Redis settings (compatible with redis-cache plugin)
 define('WP_REDIS_HOST', 'redis');      // or '127.0.0.1'
@@ -319,6 +331,25 @@ define('WP_REDIS_DATABASE', 0);        // optional, 0-15
 define('WP_MEMCACHED_HOST', '127.0.0.1');
 define('WP_MEMCACHED_PORT', 11211);
 ```
+
+A constant anywhere in `wp-config.php` locks the setting in the admin ("set in wp-config.php"). Constants inside the plugin's own block stay editable from the admin:
+
+```php
+// BEGIN WP Queue
+// Managed by WP Queue (Tools > Queues). Edit in the admin or here.
+define('WP_QUEUE_DRIVER', 'redis');
+// END WP Queue
+```
+
+The plugin rewrites only this block: temp file + atomic rename, owner and permissions preserved, backup, PHP syntax check and a WordPress load check over HTTP; on failure the backup is restored. If the file is not writable, the admin shows the block to paste manually. Requires `manage_options`; every form has a nonce.
+
+```bash
+wp queue config                                   # show driver, runner, reason, heartbeat
+wp queue config --driver=redis --store=wp-config  # move jobs, save in the WP Queue block
+wp queue config --runner=daemon                   # save in the plugin option
+```
+
+See [docs/runners-and-drivers.md](docs/runners-and-drivers.md) for details.
 
 ### Programmatic Configuration
 

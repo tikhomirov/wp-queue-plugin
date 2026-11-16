@@ -6,16 +6,18 @@ use WPQueue\Admin\SystemStatus;
 
 beforeEach(function (): void {
     Brain\Monkey\Functions\stubs([
-        '__' => fn ($text) => $text,
-        'esc_html__' => fn ($text) => $text,
-        'home_url' => fn () => 'https://example.com',
-        'site_url' => fn () => 'http://example.com/wp-cron.php',
-        'wp_remote_post' => fn () => ['response' => ['code' => 200]],
+        '__'                               => fn ($text) => $text,
+        'esc_html__'                       => fn ($text) => $text,
+        'home_url'                         => fn () => 'https://example.com',
+        'site_url'                         => fn () => 'http://example.com/wp-cron.php',
+        'wp_remote_post'                   => fn () => ['response' => ['code' => 200]],
         'wp_remote_retrieve_response_code' => fn ($response) => $response['response']['code'] ?? 0,
-        'is_wp_error' => fn ($thing) => false,
-        'get_option' => fn ($key, $default = false) => $default,
-        'size_format' => fn ($bytes) => round($bytes / 1024 / 1024, 2).' MB',
-        'wp_date' => fn (string $format) => date($format),
+        'wp_remote_retrieve_body'          => fn () => 'wp-queue-pong',
+        'admin_url'                        => fn ($path = '') => 'http://example.com/wp-admin/' . $path,
+        'is_wp_error'                      => fn ($thing) => false,
+        'get_option'                       => fn ($key, $default = false) => $default,
+        'size_format'                      => fn ($bytes) => round($bytes / 1024 / 1024, 2) . ' MB',
+        'wp_date'                          => fn (string $format) => date($format),
     ]);
 });
 
@@ -73,10 +75,10 @@ describe('SystemStatus', function (): void {
 
     it('can check loopback status', function (): void {
         Brain\Monkey\Functions\stubs([
-            'admin_url' => fn () => 'http://example.com/wp-admin/admin-ajax.php',
-            'apply_filters' => fn ($filter, $value) => $value,
-            'wp_remote_post' => fn () => ['response' => ['code' => 200]],
-            'is_wp_error' => fn () => false,
+            'admin_url'                        => fn () => 'http://example.com/wp-admin/admin-ajax.php',
+            'apply_filters'                    => fn ($filter, $value) => $value,
+            'wp_remote_post'                   => fn () => ['response' => ['code' => 200]],
+            'is_wp_error'                      => fn () => false,
             'wp_remote_retrieve_response_code' => fn () => 200,
         ]);
 
@@ -86,11 +88,30 @@ describe('SystemStatus', function (): void {
         expect($loopback['status'])->toBe('ok');
     });
 
+    it('never requests wp-cron.php for the loopback check', function (): void {
+        $requested = null;
+
+        Brain\Monkey\Functions\stubs([
+            'apply_filters'  => fn ($filter, $value) => $value,
+            'wp_remote_post' => function ($url, $args) use (&$requested) {
+                $requested = [$url, $args['body']];
+
+                return ['response' => ['code' => 200]];
+            },
+        ]);
+
+        (new SystemStatus())->checkLoopback();
+
+        expect($requested[0])->toContain('admin-ajax.php')
+            ->and($requested[0])->not->toContain('wp-cron.php')
+            ->and($requested[1])->toBe(['action' => SystemStatus::PING_ACTION]);
+    });
+
     it('detects unexpected response code as warning', function (): void {
         Brain\Monkey\Functions\stubs([
-            'apply_filters' => fn ($filter, $value) => $value,
-            'wp_remote_post' => fn () => ['response' => ['code' => 400]],
-            'is_wp_error' => fn () => false,
+            'apply_filters'                    => fn ($filter, $value) => $value,
+            'wp_remote_post'                   => fn () => ['response' => ['code' => 400]],
+            'is_wp_error'                      => fn () => false,
             'wp_remote_retrieve_response_code' => fn () => 400,
         ]);
 
@@ -111,10 +132,10 @@ describe('SystemStatus', function (): void {
         };
 
         Brain\Monkey\Functions\stubs([
-            'admin_url' => fn () => 'http://example.com/wp-admin/admin-ajax.php',
-            'apply_filters' => fn ($filter, $value) => $value,
+            'admin_url'      => fn () => 'http://example.com/wp-admin/admin-ajax.php',
+            'apply_filters'  => fn ($filter, $value) => $value,
             'wp_remote_post' => fn () => $wpError,
-            'is_wp_error' => fn ($thing) => is_object($thing) && method_exists($thing, 'get_error_message'),
+            'is_wp_error'    => fn ($thing) => is_object($thing) && method_exists($thing, 'get_error_message'),
         ]);
 
         $status = new SystemStatus();
@@ -126,13 +147,13 @@ describe('SystemStatus', function (): void {
 
     it('can get full system report', function (): void {
         Brain\Monkey\Functions\stubs([
-            'admin_url' => fn () => 'http://example.com/wp-admin/admin-ajax.php',
-            'apply_filters' => fn ($filter, $value) => $value,
-            'wp_remote_post' => fn () => ['response' => ['code' => 200]],
-            'is_wp_error' => fn () => false,
+            'admin_url'                        => fn () => 'http://example.com/wp-admin/admin-ajax.php',
+            'apply_filters'                    => fn ($filter, $value) => $value,
+            'wp_remote_post'                   => fn () => ['response' => ['code' => 200]],
+            'is_wp_error'                      => fn () => false,
             'wp_remote_retrieve_response_code' => fn () => 200,
-            'wp_timezone_string' => fn () => 'Europe/Moscow',
-            'current_time' => fn () => date('Y-m-d H:i:s'),
+            'wp_timezone_string'               => fn () => 'Europe/Moscow',
+            'current_time'                     => fn () => date('Y-m-d H:i:s'),
         ]);
 
         global $wp_version;

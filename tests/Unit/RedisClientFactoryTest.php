@@ -45,7 +45,7 @@ describe('RedisClientFactory', function (): void {
             expect($clients)->toContain('phpredis');
         }
 
-        if (class_exists('\Predis\Client') || (defined('WP_REDIS_PLUGIN_PATH') && file_exists(WP_REDIS_PLUGIN_PATH.'/dependencies/predis/predis/autoload.php'))) {
+        if (class_exists('\Predis\Client') || (defined('WP_REDIS_PLUGIN_PATH') && file_exists(WP_REDIS_PLUGIN_PATH . '/dependencies/predis/predis/autoload.php'))) {
             expect($clients)->toContain('predis');
         }
     });
@@ -56,14 +56,14 @@ describe('RedisClientFactory', function (): void {
         }
 
         $config = [
-            'host' => '127.0.0.1',
-            'port' => 6379,
-            'password' => null,
-            'database' => 0,
-            'prefix' => 'test_',
-            'scheme' => 'tcp',
-            'path' => null,
-            'timeout' => 1.0,
+            'host'         => '127.0.0.1',
+            'port'         => 6379,
+            'password'     => null,
+            'database'     => 0,
+            'prefix'       => 'test_',
+            'scheme'       => 'tcp',
+            'path'         => null,
+            'timeout'      => 1.0,
             'read_timeout' => 1.0,
         ];
 
@@ -78,14 +78,14 @@ describe('RedisClientFactory', function (): void {
         }
 
         $config = [
-            'host' => '127.0.0.1',
-            'port' => 6379,
-            'password' => null,
-            'database' => 0,
-            'prefix' => 'test_',
-            'scheme' => 'tcp',
-            'path' => null,
-            'timeout' => 1.0,
+            'host'         => '127.0.0.1',
+            'port'         => 6379,
+            'password'     => null,
+            'database'     => 0,
+            'prefix'       => 'test_',
+            'scheme'       => 'tcp',
+            'path'         => null,
+            'timeout'      => 1.0,
             'read_timeout' => 1.0,
         ];
 
@@ -101,19 +101,19 @@ describe('RedisClientFactory', function (): void {
         }
 
         $config = [
-            'host' => '127.0.0.1',
-            'port' => 6379,
-            'password' => null,
-            'database' => 0,
-            'prefix' => 'test_',
-            'scheme' => 'tcp',
-            'path' => null,
-            'timeout' => 1.0,
+            'host'         => '127.0.0.1',
+            'port'         => 6379,
+            'password'     => null,
+            'database'     => 0,
+            'prefix'       => 'test_',
+            'scheme'       => 'tcp',
+            'path'         => null,
+            'timeout'      => 1.0,
             'read_timeout' => 1.0,
         ];
 
         expect(fn () => RedisClientFactory::create($config))
-            ->toThrow(\RuntimeException::class);
+            ->toThrow(RuntimeException::class);
     });
 });
 
@@ -130,14 +130,14 @@ describe('RedisClientInterface implementations', function (): void {
         }
 
         $config = [
-            'host' => '127.0.0.1',
-            'port' => 6379,
-            'password' => null,
-            'database' => 0,
-            'prefix' => 'test_',
-            'scheme' => 'tcp',
-            'path' => null,
-            'timeout' => 1.0,
+            'host'         => '127.0.0.1',
+            'port'         => 6379,
+            'password'     => null,
+            'database'     => 0,
+            'prefix'       => 'test_',
+            'scheme'       => 'tcp',
+            'path'         => null,
+            'timeout'      => 1.0,
             'read_timeout' => 1.0,
         ];
 
@@ -154,14 +154,14 @@ describe('RedisClientInterface implementations', function (): void {
         }
 
         $config = [
-            'host' => '127.0.0.1',
-            'port' => 6379,
-            'password' => null,
-            'database' => 0,
-            'prefix' => 'test_',
-            'scheme' => 'tcp',
-            'path' => null,
-            'timeout' => 1.0,
+            'host'         => '127.0.0.1',
+            'port'         => 6379,
+            'password'     => null,
+            'database'     => 0,
+            'prefix'       => 'test_',
+            'scheme'       => 'tcp',
+            'path'         => null,
+            'timeout'      => 1.0,
             'read_timeout' => 1.0,
         ];
 

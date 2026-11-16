@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace WPQueue\CLI;
 
-use WP_CLI;
 use WP_CLI\Utils;
 use WPQueue\Admin\SystemStatus;
+use WPQueue\Runtime\Runner;
+use WPQueue\Support\DriverSwitcher;
+use WPQueue\Support\Lock;
+use WPQueue\Support\Settings;
 use WPQueue\WPQueue;
 
 if (! defined('ABSPATH')) {
@@ -54,31 +57,23 @@ class QueueCommand
      */
     public function status(array $args, array $assocArgs): void
     {
-        global $wpdb;
-
         $queues = [];
-        $results = $wpdb->get_col(
-            $wpdb->prepare(
-                "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
-                'wp_queue_jobs_%',
-            ),
-        );
+        $manager = WPQueue::manager();
 
-        foreach ($results as $optionName) {
-            $queueName = str_replace('wp_queue_jobs_', '', $optionName);
-            $jobs = get_site_option($optionName, []);
+        foreach ($manager->discoverQueues() as $queueName) {
+            $jobs = $manager->queuedJobs($queueName);
 
             $queues[] = [
-                'queue' => $queueName,
-                'jobs' => count($jobs),
+                'queue'  => $queueName,
+                'jobs'   => count($jobs),
                 'status' => WPQueue::isPaused($queueName) ? 'paused' : (WPQueue::isProcessing($queueName) ? 'processing' : 'idle'),
             ];
         }
 
         if (empty($queues)) {
             $queues[] = [
-                'queue' => 'default',
-                'jobs' => 0,
+                'queue'  => 'default',
+                'jobs'   => 0,
                 'status' => 'idle',
             ];
         }
@@ -110,6 +105,18 @@ class QueueCommand
      * default: 256
      * ---
      *
+     * [--all]
+     * : Process every queue that has jobs (the queue argument is processed first).
+     *
+     * [--max-time=<seconds>]
+     * : Stop after this many seconds (0 = no limit).
+     * ---
+     * default: 0
+     * ---
+     *
+     * [--force]
+     * : Process even if another runner (loopback, WP-Cron, sync) is selected.
+     *
      * [--daemon]
      * : Run as a daemon worker that continuously polls the queue.
      *   In daemon mode loopback requests and WP-Cron scheduling are skipped
@@ -120,6 +127,7 @@ class QueueCommand
      *     wp queue work
      *     wp queue work emails --limit=50
      *     wp queue work imports --memory=512
+     *     wp queue work --all --limit=50 --max-time=50
      *     wp queue work --daemon
      *     wp queue work imports --daemon --memory=512
      *
@@ -129,34 +137,69 @@ class QueueCommand
     {
         $queue = $args[0] ?? 'default';
 
+        // Exactly one runner is active. A system cron line left in place after
+        // switching to another runner only reports that it is still there.
+        if (empty($assocArgs['force']) && ! Runner::cliWorkerAllowed()) {
+            Runner::beat(Runner::DAEMON, 0, true);
+            \WP_CLI::log(sprintf('Active runner is "%s"; skipping (use --force to process anyway).', Runner::active()));
+
+            return;
+        }
+
         if (! empty($assocArgs['daemon'])) {
             $this->runDaemon($queue, $assocArgs);
 
             return;
         }
 
-        $limit = (int) ($assocArgs['limit'] ?? 100);
+        $limit = max(1, (int) ($assocArgs['limit'] ?? 100));
+        $maxTime = max(0, (int) ($assocArgs['max-time'] ?? 0));
 
         // Get default memory limit from WordPress
         $defaultMemory = $this->getDefaultMemoryLimit();
         $memory = (int) ($assocArgs['memory'] ?? $defaultMemory);
 
-        WP_CLI::log("Processing jobs from queue: {$queue} (memory limit: {$memory}MB, WordPress default: {$defaultMemory}MB)");
+        $lockTtl = ($maxTime > 0 ? $maxTime : 3600) + 60;
+        $token = Lock::acquire(Lock::WORKER, $lockTtl);
 
-        $worker = WPQueue::worker();
-        $worker->setMemoryLimit($memory);
+        if ($token === null) {
+            Runner::beat(Runner::DAEMON, 0, true);
+            \WP_CLI::log('Another worker is processing the queues, skipping.');
 
-        $processed = 0;
-
-        while ($processed < $limit) {
-            if (! $worker->runNextJob($queue)) {
-                break;
-            }
-            $processed++;
-            WP_CLI::log("Processed job #{$processed}");
+            return;
         }
 
-        WP_CLI::success("Processed {$processed} jobs from queue: {$queue}");
+        try {
+            \WP_CLI::log("Processing jobs from queue: {$queue} (memory limit: {$memory}MB, WordPress default: {$defaultMemory}MB)");
+
+            $worker = WPQueue::worker();
+            $worker->setMemoryLimit($memory);
+            $worker->setMaxJobs($limit);
+            $worker->setMaxTime($maxTime);
+            $worker->resetJobsProcessed();
+
+            try {
+                (new DriverSwitcher(WPQueue::manager()))->drainPrevious();
+            } catch (\Throwable $e) {
+                \WP_CLI::warning('Moving jobs from the previous driver failed: ' . $e->getMessage());
+            }
+
+            $queues = [$queue];
+            if (! empty($assocArgs['all'])) {
+                $queues = array_values(array_unique(array_merge($queues, WPQueue::manager()->discoverQueues())));
+            }
+
+            foreach ($queues as $queueName) {
+                while (! $worker->shouldStop() && $worker->runNextJob($queueName)) {
+                    \WP_CLI::log("Processed job #{$worker->getJobsProcessed()} ({$queueName})");
+                }
+            }
+
+            Runner::beat(Runner::DAEMON, $worker->getJobsProcessed());
+            \WP_CLI::success("Processed {$worker->getJobsProcessed()} jobs from: " . implode(', ', $queues));
+        } finally {
+            Lock::release(Lock::WORKER, $token);
+        }
     }
 
     /**
@@ -172,11 +215,38 @@ class QueueCommand
 
         $memory = (int) ($assocArgs['memory'] ?? 256);
 
-        WP_CLI::log("Starting daemon worker for queue: {$queue} (memory limit: {$memory}MB)");
+        \WP_CLI::log("Starting daemon worker for queue: {$queue} (memory limit: {$memory}MB)");
+
+        $token = Lock::acquire(Lock::WORKER, 120);
+
+        if ($token === null) {
+            \WP_CLI::error('Another worker is processing the queues.');
+        }
 
         $worker = WPQueue::worker();
         $worker->setMemoryLimit($memory);
-        $worker->daemon($queue);
+
+        try {
+            while (! $worker->shouldStop()) {
+                if (! Lock::refresh(Lock::WORKER, $token, 120)) {
+                    \WP_CLI::warning('Worker lock lost, stopping.');
+
+                    break;
+                }
+
+                $lastBeat ??= 0;
+                if (time() - $lastBeat >= 30) {
+                    Runner::beat(Runner::DAEMON, $worker->getJobsProcessed());
+                    $lastBeat = time();
+                }
+
+                if (! $worker->runNextJob($queue)) {
+                    sleep(3);
+                }
+            }
+        } finally {
+            Lock::release(Lock::WORKER, $token);
+        }
     }
 
     /**
@@ -204,10 +274,10 @@ class QueueCommand
     {
         $queue = $args[0] ?? 'default';
 
-        WP_CLI::confirm("Are you sure you want to clear all jobs from queue '{$queue}'?", $assocArgs);
+        \WP_CLI::confirm("Are you sure you want to clear all jobs from queue '{$queue}'?", $assocArgs);
 
         $cleared = WPQueue::clear($queue);
-        WP_CLI::success("Cleared {$cleared} jobs from queue: {$queue}");
+        \WP_CLI::success("Cleared {$cleared} jobs from queue: {$queue}");
     }
 
     /**
@@ -232,7 +302,7 @@ class QueueCommand
     {
         $queue = $args[0] ?? 'default';
         WPQueue::pause($queue);
-        WP_CLI::success("Queue '{$queue}' paused");
+        \WP_CLI::success("Queue '{$queue}' paused");
     }
 
     /**
@@ -257,7 +327,7 @@ class QueueCommand
     {
         $queue = $args[0] ?? 'default';
         WPQueue::resume($queue);
-        WP_CLI::success("Queue '{$queue}' resumed");
+        \WP_CLI::success("Queue '{$queue}' resumed");
     }
 
     /**
@@ -287,17 +357,17 @@ class QueueCommand
         $logs = WPQueue::logs()->failed();
 
         if (empty($logs)) {
-            WP_CLI::log('No failed jobs found.');
+            \WP_CLI::log('No failed jobs found.');
 
             return;
         }
 
         $items = array_map(fn ($log) => [
-            'id' => $log['job_id'] ?? '-',
-            'job' => $log['job_class'],
+            'id'    => $log['job_id'] ?? '-',
+            'job'   => $log['job_class'],
             'queue' => $log['queue'],
-            'error' => substr($log['message'] ?? '', 0, 50),
-            'time' => wp_date('Y-m-d H:i:s', $log['timestamp']),
+            'error' => mb_substr($log['message'] ?? '', 0, 50),
+            'time'  => wp_date('Y-m-d H:i:s', $log['timestamp']),
         ], $logs);
 
         $format = $assocArgs['format'] ?? 'table';
@@ -335,7 +405,7 @@ class QueueCommand
         $format = $assocArgs['format'] ?? 'table';
 
         if ($format === 'json') {
-            WP_CLI::log(wp_json_encode(['report' => $report, 'health' => $health], JSON_PRETTY_PRINT));
+            \WP_CLI::log(wp_json_encode(['report' => $report, 'health' => $health], JSON_PRETTY_PRINT));
 
             return;
         }
@@ -344,8 +414,8 @@ class QueueCommand
             ['key' => 'PHP Version', 'value' => $report['php_version']],
             ['key' => 'WordPress Version', 'value' => $report['wp_version']],
             ['key' => 'Memory Limit', 'value' => $report['memory_limit_formatted']],
-            ['key' => 'Memory Usage', 'value' => $report['current_memory_formatted'].' ('.$report['memory_percent'].'%)'],
-            ['key' => 'Max Execution Time', 'value' => $report['max_execution_time'].'s'],
+            ['key' => 'Memory Usage', 'value' => $report['current_memory_formatted'] . ' (' . $report['memory_percent'] . '%)'],
+            ['key' => 'Max Execution Time', 'value' => $report['max_execution_time'] . 's'],
             ['key' => 'WP-Cron Disabled', 'value' => $report['wp_cron_disabled'] ? 'Yes' : 'No'],
             ['key' => 'Loopback Status', 'value' => $report['loopback']['status']],
             ['key' => 'Timezone', 'value' => $report['timezone']],
@@ -355,9 +425,9 @@ class QueueCommand
         Utils\format_items('table', $items, ['key', 'value']);
 
         if (! empty($health['issues'])) {
-            WP_CLI::warning('Issues detected:');
+            \WP_CLI::warning('Issues detected:');
             foreach ($health['issues'] as $issue) {
-                WP_CLI::log("  - {$issue}");
+                \WP_CLI::log("  - {$issue}");
             }
         }
     }
@@ -396,22 +466,97 @@ class QueueCommand
      */
     protected function convertToMB(string $value): int
     {
-        $value = strtoupper(trim($value));
+        $value = mb_strtoupper(mb_trim($value));
         $multiplier = 1;
 
         if (str_ends_with($value, 'G')) {
             $multiplier = 1024 * 1024 * 1024;
-            $value = substr($value, 0, -1);
+            $value = mb_substr($value, 0, -1);
         } elseif (str_ends_with($value, 'M')) {
             $multiplier = 1024 * 1024;
-            $value = substr($value, 0, -1);
+            $value = mb_substr($value, 0, -1);
         } elseif (str_ends_with($value, 'K')) {
             $multiplier = 1024;
-            $value = substr($value, 0, -1);
+            $value = mb_substr($value, 0, -1);
         }
 
         $bytes = (int) $value * $multiplier;
 
         return (int) ($bytes / 1024 / 1024);
+    }
+
+    /**
+     * Show or change the storage driver and the queue runner.
+     *
+     * ## OPTIONS
+     *
+     * [--driver=<driver>]
+     * : Storage driver: database, redis, memcached. Waiting jobs are moved.
+     *
+     * [--runner=<runner>]
+     * : Queue runner: auto, daemon, loopback, wp_cron, sync.
+     *
+     * [--store=<where>]
+     * : Where to save: option (plugin settings) or wp-config (WP Queue block).
+     *
+     * ## EXAMPLES
+     *
+     *     wp queue config
+     *     wp queue config --driver=redis
+     *     wp queue config --runner=daemon
+     *
+     * @when after_wp_load
+     */
+    public function config(array $args, array $assocArgs): void
+    {
+        $toConfig = match ($assocArgs['store'] ?? null) {
+            'wp-config', 'config' => true,
+            'option'              => false,
+            default               => null,
+        };
+
+        if (isset($assocArgs['driver'])) {
+            $result = (new DriverSwitcher(WPQueue::manager()))->switchTo((string) $assocArgs['driver'], $toConfig);
+            $this->reportSettingResult($result);
+        }
+
+        if (isset($assocArgs['runner'])) {
+            $runner = Runner::normalize((string) $assocArgs['runner']);
+
+            if ($runner !== (string) $assocArgs['runner']) {
+                \WP_CLI::error('Unknown runner. Use: auto, daemon, loopback, wp_cron, sync.');
+            }
+
+            $result = Settings::persist('runner', $runner, $toConfig);
+            Runner::reset();
+            $this->reportSettingResult($result);
+        }
+
+        $driver = Settings::driver();
+        $runner = Settings::runner();
+        $resolved = Runner::resolve();
+
+        \WP_CLI::log(sprintf('Driver:  %s (active: %s, source: %s)', $driver['value'], WPQueue::manager()->getDefaultDriver(), $driver['source']));
+        \WP_CLI::log(sprintf('Runner:  %s (active: %s, source: %s)', $runner['value'], $resolved['runner'], $runner['source']));
+        \WP_CLI::log('Reason:  ' . $resolved['reason']);
+
+        $beat = Runner::heartbeat(Runner::DAEMON);
+        \WP_CLI::log('Daemon heartbeat: ' . ($beat === null ? 'never' : gmdate('Y-m-d H:i:s', $beat['at']) . ' UTC' . ($beat['skipped'] ? ' (skipped)' : '')));
+    }
+
+    /**
+     * @param array{ok: bool, message: string, snippet?: string} $result
+     */
+    private function reportSettingResult(array $result): void
+    {
+        if (! $result['ok']) {
+            if (! empty($result['snippet'])) {
+                \WP_CLI::log($result['snippet']);
+            }
+
+            \WP_CLI::error($result['message']);
+        }
+
+        \WP_CLI::success($result['message']);
     }
 }

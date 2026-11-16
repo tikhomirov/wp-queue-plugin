@@ -8,8 +8,8 @@ use WPQueue\QueueManager;
 describe('QueueManager Redis Status', function (): void {
     beforeEach(function (): void {
         Brain\Monkey\Functions\stubs([
-            '__' => fn ($text, $domain = 'default') => $text,
-            'get_site_option' => fn () => false,
+            '__'                 => fn ($text, $domain = 'default') => $text,
+            'get_site_option'    => fn () => false,
             'update_site_option' => fn () => true,
         ]);
     });
@@ -86,7 +86,9 @@ describe('QueueManager Redis Status', function (): void {
         $manager = new QueueManager();
         $drivers = $manager->getAvailableDrivers();
 
-        expect($drivers)->toHaveKeys(['database', 'sync', 'redis', 'memcached']);
+        // Sync is a runner now, not a storage backend.
+        expect($drivers)->toHaveKeys(['database', 'redis', 'memcached'])
+            ->and($drivers)->not->toHaveKey('sync');
 
         foreach ($drivers as $name => $info) {
             expect($info)->toHaveKeys(['status', 'extension', 'server', 'message', 'available']);
@@ -109,8 +111,8 @@ describe('QueueManager Redis Status', function (): void {
 describe('QueueManager Redis with Plugin', function (): void {
     beforeEach(function (): void {
         Brain\Monkey\Functions\stubs([
-            '__' => fn ($text, $domain = 'default') => $text,
-            'get_site_option' => fn () => false,
+            '__'                 => fn ($text, $domain = 'default') => $text,
+            'get_site_option'    => fn () => false,
             'update_site_option' => fn () => true,
         ]);
     });

@@ -37,14 +37,14 @@ class SettingsBasedJob extends Job
 
 beforeEach(function (): void {
     Brain\Monkey\Functions\stubs([
-        'add_filter' => fn () => true,
-        'add_action' => fn () => true,
-        'wp_get_scheduled_event' => fn () => false,
-        'wp_schedule_event' => fn () => true,
+        'add_filter'              => fn () => true,
+        'add_action'              => fn () => true,
+        'wp_get_scheduled_event'  => fn () => false,
+        'wp_schedule_event'       => fn () => true,
         'wp_clear_scheduled_hook' => fn () => true,
-        'wp_unschedule_hook' => fn () => true,
-        'get_option' => fn ($key, $default = false) => $default,
-        '__' => fn ($text) => $text,
+        'wp_unschedule_hook'      => fn () => true,
+        'get_option'              => fn ($key, $default = false) => $default,
+        '__'                      => fn ($text) => $text,
     ]);
 });
 

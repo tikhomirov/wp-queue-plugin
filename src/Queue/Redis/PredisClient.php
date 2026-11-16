@@ -50,8 +50,8 @@ class PredisClient implements RedisClientInterface
 
         // Load Predis from redis-cache plugin if available
         if (! class_exists('\Predis\Client')) {
-            if (defined('WP_REDIS_PLUGIN_PATH') && file_exists(WP_REDIS_PLUGIN_PATH.'/dependencies/predis/predis/autoload.php')) {
-                require_once WP_REDIS_PLUGIN_PATH.'/dependencies/predis/predis/autoload.php';
+            if (defined('WP_REDIS_PLUGIN_PATH') && file_exists(WP_REDIS_PLUGIN_PATH . '/dependencies/predis/predis/autoload.php')) {
+                require_once WP_REDIS_PLUGIN_PATH . '/dependencies/predis/predis/autoload.php';
             }
         }
 
@@ -61,11 +61,11 @@ class PredisClient implements RedisClientInterface
 
         try {
             $parameters = [
-                'scheme' => $this->config['scheme'],
-                'host' => $this->config['host'],
-                'port' => $this->config['port'],
-                'database' => $this->config['database'],
-                'timeout' => $this->config['timeout'],
+                'scheme'             => $this->config['scheme'],
+                'host'               => $this->config['host'],
+                'port'               => $this->config['port'],
+                'database'           => $this->config['database'],
+                'timeout'            => $this->config['timeout'],
                 'read_write_timeout' => $this->config['read_timeout'],
             ];
 
@@ -92,7 +92,7 @@ class PredisClient implements RedisClientInterface
             $this->connected = true;
         } catch (\Throwable $e) {
             $this->connected = false;
-            throw new \RuntimeException(esc_html('Predis connection failed: '.$e->getMessage()), 0, $e);
+            throw new \RuntimeException(esc_html('Predis connection failed: ' . $e->getMessage()), 0, $e);
         }
     }
 
@@ -241,9 +241,32 @@ class PredisClient implements RedisClientInterface
         $keys = $this->redis->keys($this->prefixKey($pattern)) ?: [];
 
         // Remove prefix from returned keys
-        $prefixLen = strlen($this->prefix);
+        $prefixLen = mb_strlen($this->prefix);
 
-        return array_map(fn ($key) => substr($key, $prefixLen), $keys);
+        return array_map(fn ($key) => mb_substr($key, $prefixLen), $keys);
+    }
+
+    public function evalScript(string $script, array $keys, array $args = []): mixed
+    {
+        $this->ensureConnected();
+
+        $prefixed = array_map(fn (string $key): string => $this->prefixKey($key), $keys);
+
+        return $this->redis->eval($script, count($prefixed), ...array_merge($prefixed, array_map('strval', $args)));
+    }
+
+    public function sAdd(string $key, string $member): int
+    {
+        $this->ensureConnected();
+
+        return (int) $this->redis->sadd($this->prefixKey($key), [$member]);
+    }
+
+    public function sMembers(string $key): array
+    {
+        $this->ensureConnected();
+
+        return array_values(array_map('strval', $this->redis->smembers($this->prefixKey($key)) ?: []));
     }
 
     public function getClientType(): string
@@ -253,7 +276,7 @@ class PredisClient implements RedisClientInterface
 
     protected function prefixKey(string $key): string
     {
-        return $this->prefix.$key;
+        return $this->prefix . $key;
     }
 
     protected function ensureConnected(): void

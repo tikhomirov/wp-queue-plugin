@@ -35,7 +35,7 @@ class Scheduler
     /**
      * Schedule a job class.
      *
-     * @param  class-string<JobInterface>  $jobClass
+     * @param class-string<JobInterface> $jobClass
      */
     public function job(string $jobClass): ScheduledJob
     {
@@ -73,7 +73,7 @@ class Scheduler
     }
 
     /**
-     * @param  array<string, array{interval: int, display: string}>  $schedules
+     * @param  array<string, array{interval: int, display: string}> $schedules
      * @return array<string, array{interval: int, display: string}>
      */
     public function registerIntervals(array $schedules): array
@@ -88,7 +88,7 @@ class Scheduler
     {
         $this->intervals[$name] = [
             'interval' => $seconds,
-            'display' => $display,
+            'display'  => $display,
         ];
     }
 
@@ -113,7 +113,7 @@ class Scheduler
     }
 
     /**
-     * @param  class-string<JobInterface>  $jobClass
+     * @param class-string<JobInterface> $jobClass
      */
     protected function registerJob(string $jobClass, ScheduledJob $scheduled): void
     {
@@ -163,7 +163,7 @@ class Scheduler
 
         // Handle one-time events
         if (str_starts_with($interval, 'once_')) {
-            $timestamp = (int) substr($interval, 5);
+            $timestamp = (int) mb_substr($interval, 5);
 
             if ($existing !== false) {
                 // If exists but different timestamp or is recurring
@@ -198,22 +198,22 @@ class Scheduler
     }
 
     /**
-     * @param  class-string<JobInterface>  $jobClass
+     * @param class-string<JobInterface> $jobClass
      */
     protected function getHook(string $jobClass): string
     {
         // Извлекаем короткое имя класса без ReflectionClass
-        $name = substr(strrchr($jobClass, '\\') ?: $jobClass, 1) ?: $jobClass;
+        $name = mb_substr(mb_strrchr($jobClass, '\\') ?: $jobClass, 1) ?: $jobClass;
 
-        return 'wp_queue_'.strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $name));
+        return 'wp_queue_' . mb_strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $name));
     }
 
     /**
-     * @param  class-string<JobInterface>  $jobClass
+     * @param class-string<JobInterface> $jobClass
      */
     protected function applyAttributes(string $jobClass, ScheduledJob $scheduled): void
     {
-        $reflection = new ReflectionClass($jobClass);
+        $reflection = new \ReflectionClass($jobClass);
 
         // Schedule attribute
         $scheduleAttrs = $reflection->getAttributes(Schedule::class);
@@ -254,17 +254,17 @@ class Scheduler
     protected function registerDefaultIntervals(): void
     {
         $this->intervals = [
-            'min' => ['interval' => 60, 'display' => 'Every Minute'],
-            '5min' => ['interval' => 5 * 60, 'display' => 'Every 5 Minutes'],
-            '10min' => ['interval' => 10 * 60, 'display' => 'Every 10 Minutes'],
-            '15min' => ['interval' => 15 * 60, 'display' => 'Every 15 Minutes'],
-            '30min' => ['interval' => 30 * 60, 'display' => 'Every 30 Minutes'],
-            '2hourly' => ['interval' => 2 * HOUR_IN_SECONDS, 'display' => 'Every 2 Hours'],
-            '3hourly' => ['interval' => 3 * HOUR_IN_SECONDS, 'display' => 'Every 3 Hours'],
-            '6hourly' => ['interval' => 6 * HOUR_IN_SECONDS, 'display' => 'Every 6 Hours'],
-            '8hourly' => ['interval' => 8 * HOUR_IN_SECONDS, 'display' => 'Every 8 Hours'],
+            'min'      => ['interval' => 60, 'display' => 'Every Minute'],
+            '5min'     => ['interval' => 5 * 60, 'display' => 'Every 5 Minutes'],
+            '10min'    => ['interval' => 10 * 60, 'display' => 'Every 10 Minutes'],
+            '15min'    => ['interval' => 15 * 60, 'display' => 'Every 15 Minutes'],
+            '30min'    => ['interval' => 30 * 60, 'display' => 'Every 30 Minutes'],
+            '2hourly'  => ['interval' => 2 * HOUR_IN_SECONDS, 'display' => 'Every 2 Hours'],
+            '3hourly'  => ['interval' => 3 * HOUR_IN_SECONDS, 'display' => 'Every 3 Hours'],
+            '6hourly'  => ['interval' => 6 * HOUR_IN_SECONDS, 'display' => 'Every 6 Hours'],
+            '8hourly'  => ['interval' => 8 * HOUR_IN_SECONDS, 'display' => 'Every 8 Hours'],
             '12hourly' => ['interval' => 12 * HOUR_IN_SECONDS, 'display' => 'Every 12 Hours'],
-            'monthly' => ['interval' => 30 * DAY_IN_SECONDS, 'display' => 'Monthly'],
+            'monthly'  => ['interval' => 30 * DAY_IN_SECONDS, 'display' => 'Monthly'],
         ];
     }
 }

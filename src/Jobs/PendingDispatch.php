@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace WPQueue\Jobs;
 
 use WPQueue\Contracts\JobInterface;
-use WPQueue\Loopback\LoopbackDispatcher;
 use WPQueue\QueueManager;
+use WPQueue\Runtime\Trigger;
 
 if (! defined('ABSPATH')) {
     exit;
@@ -15,10 +15,6 @@ if (! defined('ABSPATH')) {
 class PendingDispatch
 {
     protected bool $shouldDispatch = true;
-
-    protected static bool $spawnRegistered = false;
-
-    protected static bool $spawnQueued = false;
 
     public function __construct(
         protected JobInterface $job,
@@ -77,38 +73,8 @@ class PendingDispatch
         $queue->push($this->job);
 
         $queueName = $this->job->getQueue() ?: 'default';
-        LoopbackDispatcher::spawn($queueName);
-        self::scheduleImmediateProcessing($queueName);
-    }
+        $this->manager->rememberQueue($queueName);
 
-    protected static function scheduleImmediateProcessing(string $queue): void
-    {
-        if (! function_exists('wp_schedule_single_event') || ! function_exists('spawn_cron')) {
-            return;
-        }
-
-        if (! self::$spawnRegistered) {
-            self::$spawnRegistered = true;
-
-            register_shutdown_function(static function (): void {
-                if (! self::$spawnQueued) {
-                    return;
-                }
-
-                self::$spawnQueued = false;
-
-                try {
-                    spawn_cron();
-                } catch (\Throwable $e) {
-                    error_log('WP Queue: spawn_cron failed: '.$e->getMessage());
-                }
-            });
-        }
-
-        if (wp_next_scheduled('wp_queue_process', [$queue]) === false) {
-            wp_schedule_single_event(time(), 'wp_queue_process', [$queue]);
-        }
-
-        self::$spawnQueued = true;
+        Trigger::afterDispatch($queueName);
     }
 }

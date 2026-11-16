@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace WPQueue\CLI;
 
-use WP_CLI;
 use WP_CLI\Utils;
 use WPQueue\Admin\CronMonitor;
 
@@ -75,16 +74,16 @@ class CronCommand
         }
 
         if (empty($events)) {
-            WP_CLI::log('No cron events found.');
+            \WP_CLI::log('No cron events found.');
 
             return;
         }
 
         $items = array_map(fn ($event) => [
-            'hook' => $event['hook'],
+            'hook'     => $event['hook'],
             'next_run' => $event['is_overdue'] ? 'OVERDUE' : $event['next_run'],
             'schedule' => $event['schedule'] ?: 'single',
-            'source' => $event['source'],
+            'source'   => $event['source'],
         ], $events);
 
         $format = $assocArgs['format'] ?? 'table';
@@ -110,11 +109,11 @@ class CronCommand
     {
         $hook = $args[0];
 
-        WP_CLI::log("Running cron event: {$hook}");
+        \WP_CLI::log("Running cron event: {$hook}");
 
         $this->monitor->runNow($hook);
 
-        WP_CLI::success("Cron event '{$hook}' executed");
+        \WP_CLI::success("Cron event '{$hook}' executed");
     }
 
     /**
@@ -139,10 +138,10 @@ class CronCommand
     {
         $hook = $args[0];
 
-        WP_CLI::confirm("Are you sure you want to delete all instances of '{$hook}'?", $assocArgs);
+        \WP_CLI::confirm("Are you sure you want to delete all instances of '{$hook}'?", $assocArgs);
 
         $cleared = $this->monitor->clearHook($hook);
-        WP_CLI::success("Deleted cron event: {$hook}");
+        \WP_CLI::success("Deleted cron event: {$hook}");
     }
 
     /**
@@ -165,15 +164,15 @@ class CronCommand
         $event = $this->monitor->getEvent($hook);
 
         if (! $event) {
-            WP_CLI::error("Cron event '{$hook}' not found");
+            \WP_CLI::error("Cron event '{$hook}' not found");
         }
 
         $result = $this->monitor->pause($hook, $event['timestamp'], $event['args']);
 
         if ($result) {
-            WP_CLI::success("Cron event '{$hook}' paused");
+            \WP_CLI::success("Cron event '{$hook}' paused");
         } else {
-            WP_CLI::error("Failed to pause cron event '{$hook}'");
+            \WP_CLI::error("Failed to pause cron event '{$hook}'");
         }
     }
 
@@ -198,9 +197,9 @@ class CronCommand
         $result = $this->monitor->resume($hook);
 
         if ($result) {
-            WP_CLI::success("Cron event '{$hook}' resumed");
+            \WP_CLI::success("Cron event '{$hook}' resumed");
         } else {
-            WP_CLI::error("Cron event '{$hook}' is not paused or not found");
+            \WP_CLI::error("Cron event '{$hook}' is not paused or not found");
         }
     }
 
@@ -231,14 +230,14 @@ class CronCommand
         $paused = $this->monitor->getPaused();
 
         if (empty($paused)) {
-            WP_CLI::log('No paused cron events.');
+            \WP_CLI::log('No paused cron events.');
 
             return;
         }
 
         $items = array_map(fn ($event) => [
-            'hook' => $event['hook'],
-            'schedule' => $event['schedule'] ?: 'single',
+            'hook'      => $event['hook'],
+            'schedule'  => $event['schedule'] ?: 'single',
             'paused_at' => wp_date('Y-m-d H:i:s', $event['paused_at']),
         ], $paused);
 
@@ -270,21 +269,21 @@ class CronCommand
         $newSchedule = $assocArgs['schedule'] ?? null;
 
         if (! $newSchedule) {
-            WP_CLI::error('--schedule parameter is required');
+            \WP_CLI::error('--schedule parameter is required');
         }
 
         $event = $this->monitor->getEvent($hook);
 
         if (! $event) {
-            WP_CLI::error("Cron event '{$hook}' not found");
+            \WP_CLI::error("Cron event '{$hook}' not found");
         }
 
         $result = $this->monitor->reschedule($hook, $event['timestamp'], $event['args'], $newSchedule);
 
         if ($result) {
-            WP_CLI::success("Cron event '{$hook}' rescheduled to '{$newSchedule}'");
+            \WP_CLI::success("Cron event '{$hook}' rescheduled to '{$newSchedule}'");
         } else {
-            WP_CLI::error("Failed to reschedule cron event '{$hook}'");
+            \WP_CLI::error("Failed to reschedule cron event '{$hook}'");
         }
     }
 
@@ -316,9 +315,9 @@ class CronCommand
         $items = [];
         foreach ($schedules as $name => $schedule) {
             $items[] = [
-                'name' => $name,
+                'name'     => $name,
                 'interval' => $schedule['interval'],
-                'display' => $schedule['display'],
+                'display'  => $schedule['display'],
             ];
         }
 

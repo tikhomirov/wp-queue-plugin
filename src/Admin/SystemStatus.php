@@ -10,6 +10,16 @@ if (! defined('ABSPATH')) {
 
 class SystemStatus
 {
+    public const PING_ACTION = 'wp_queue_ping';
+
+    /**
+     * admin-ajax handler for checkLoopback().
+     */
+    public static function handlePing(): void
+    {
+        wp_die('wp-queue-pong', '', ['response' => 200]);
+    }
+
     /**
      * Check if WP-Cron is disabled.
      */
@@ -92,7 +102,9 @@ class SystemStatus
      */
     public function checkLoopback(): array
     {
-        $body = ['site-health' => 'loopback-test'];
+        // A harmless admin-ajax ping. Never request wp-cron.php here: that would
+        // run every due WP-Cron event, even with DISABLE_WP_CRON.
+        $body = ['action' => self::PING_ACTION];
 
         $cookies = $_COOKIE ?? [];
         if (function_exists('wp_unslash')) {
@@ -110,34 +122,35 @@ class SystemStatus
             $user = sanitize_text_field(wp_unslash($_SERVER['PHP_AUTH_USER']));
             $pass = sanitize_text_field(wp_unslash($_SERVER['PHP_AUTH_PW']));
 
-            $headers['Authorization'] = 'Basic '.base64_encode($user.':'.$pass);
+            $headers['Authorization'] = 'Basic ' . base64_encode($user . ':' . $pass);
         }
 
-        if (function_exists('site_url')) {
-            $url = site_url('wp-cron.php');
-        } elseif (function_exists('admin_url')) {
-            $url = admin_url('admin-ajax.php');
-        } else {
-            $url = 'http://127.0.0.1';
-        }
+        $url = function_exists('admin_url') ? admin_url('admin-ajax.php') : 'http://127.0.0.1/wp-admin/admin-ajax.php';
 
         $response = wp_remote_post($url, [
-            'body' => $body,
-            'cookies' => $cookies,
-            'headers' => $headers,
-            'timeout' => $timeout,
+            'body'      => $body,
+            'cookies'   => $cookies,
+            'headers'   => $headers,
+            'timeout'   => $timeout,
             'sslverify' => $sslverify,
-            'blocking' => true,
+            'blocking'  => true,
         ]);
 
         if (is_wp_error($response)) {
             return [
-                'status' => 'error',
+                'status'  => 'error',
                 'message' => $response->get_error_message(),
             ];
         }
 
         $code = wp_remote_retrieve_response_code($response);
+
+        if ($code === 200 && mb_trim((string) wp_remote_retrieve_body($response)) !== 'wp-queue-pong') {
+            return [
+                'status'  => 'warning',
+                'message' => __('admin-ajax.php answered, but not with the WP Queue ping response', 'wp-queue'),
+            ];
+        }
 
         if ($code !== 200) {
             return [
@@ -148,7 +161,7 @@ class SystemStatus
         }
 
         return [
-            'status' => 'ok',
+            'status'  => 'ok',
             'message' => __('Loopback request successful', 'wp-queue'),
         ];
     }
@@ -192,10 +205,10 @@ class SystemStatus
             $store = \ActionScheduler::store();
 
             return [
-                'pending' => $store->query_actions(['status' => 'pending'], 'count'),
-                'running' => $store->query_actions(['status' => 'in-progress'], 'count'),
+                'pending'  => $store->query_actions(['status' => 'pending'], 'count'),
+                'running'  => $store->query_actions(['status' => 'in-progress'], 'count'),
                 'complete' => $store->query_actions(['status' => 'complete'], 'count'),
-                'failed' => $store->query_actions(['status' => 'failed'], 'count'),
+                'failed'   => $store->query_actions(['status' => 'failed'], 'count'),
             ];
         } catch (\Throwable) {
             return null;
@@ -219,9 +232,9 @@ class SystemStatus
     {
         return [
             'server_time' => wp_date('Y-m-d H:i:s'),
-            'wp_time' => current_time('mysql'),
-            'timezone' => $this->getTimezone(),
-            'gmt_offset' => (float) get_option('gmt_offset', 0),
+            'wp_time'     => current_time('mysql'),
+            'timezone'    => $this->getTimezone(),
+            'gmt_offset'  => (float) get_option('gmt_offset', 0),
         ];
     }
 
@@ -235,23 +248,23 @@ class SystemStatus
         $loopback = $this->checkLoopback();
 
         return [
-            'php_version' => $this->getPhpVersion(),
-            'wp_version' => $this->getWordPressVersion(),
-            'memory_limit' => $this->getMemoryLimit(),
-            'memory_limit_formatted' => size_format($this->getMemoryLimit()),
-            'max_execution_time' => $this->getMaxExecutionTime(),
-            'current_memory' => $this->getCurrentMemoryUsage(),
+            'php_version'              => $this->getPhpVersion(),
+            'wp_version'               => $this->getWordPressVersion(),
+            'memory_limit'             => $this->getMemoryLimit(),
+            'memory_limit_formatted'   => size_format($this->getMemoryLimit()),
+            'max_execution_time'       => $this->getMaxExecutionTime(),
+            'current_memory'           => $this->getCurrentMemoryUsage(),
             'current_memory_formatted' => size_format($this->getCurrentMemoryUsage()),
-            'memory_percent' => $this->getMemoryUsagePercent(),
-            'wp_cron_disabled' => $this->isWpCronDisabled(),
-            'alternate_cron' => $this->isAlternateCron(),
-            'loopback' => $loopback,
-            'timezone' => $this->getTimezone(),
-            'time_info' => $this->getTimeInfo(),
-            'action_scheduler' => [
+            'memory_percent'           => $this->getMemoryUsagePercent(),
+            'wp_cron_disabled'         => $this->isWpCronDisabled(),
+            'alternate_cron'           => $this->isAlternateCron(),
+            'loopback'                 => $loopback,
+            'timezone'                 => $this->getTimezone(),
+            'time_info'                => $this->getTimeInfo(),
+            'action_scheduler'         => [
                 'installed' => $this->hasActionScheduler(),
-                'version' => $this->getActionSchedulerVersion(),
-                'stats' => $this->getActionSchedulerStats(),
+                'version'   => $this->getActionSchedulerVersion(),
+                'stats'     => $this->getActionSchedulerStats(),
             ],
         ];
     }
@@ -294,13 +307,13 @@ class SystemStatus
      */
     protected function convertToBytes(string $value): int
     {
-        $value = trim($value);
+        $value = mb_trim($value);
 
         if ($value === '-1') {
             return PHP_INT_MAX;
         }
 
-        $last = strtolower($value[strlen($value) - 1]);
+        $last = mb_strtolower($value[mb_strlen($value) - 1]);
         $value = (int) $value;
 
         switch ($last) {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WPQueue\Loopback;
 
+use WPQueue\Runtime\Runner;
 use WPQueue\WPQueue;
 
 if (! defined('ABSPATH')) {
@@ -43,10 +44,34 @@ final class LoopbackHandler
             wp_die('Already processing', 'Already processing', ['response' => 200]);
         }
 
-        // Trigger the same handler the cron job uses.
-        do_action('wp_queue_process', $queue);
+        $processed = WPQueue::processQueues($queue, 50, 50, Runner::LOOPBACK);
+
+        // Jobs may have been dispatched while this worker was finishing: start
+        // another worker, but only if this one made progress (delayed jobs
+        // must not cause an endless chain of requests).
+        if ($processed !== null && $processed > 0 && self::hasPending($queue)) {
+            LoopbackDispatcher::forget($queue);
+            LoopbackDispatcher::spawn($queue);
+        }
 
         wp_die('OK', 'OK', ['response' => 200]);
+    }
+
+    /**
+     * The worker serves every queue, so look at all of them.
+     */
+    private static function hasPending(string $queue): bool
+    {
+        $queues = WPQueue::manager()->discoverQueues();
+        $queues[] = $queue;
+
+        foreach (array_unique($queues) as $name) {
+            if (WPQueue::queueSize($name) > 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -34,7 +34,7 @@ define('WP_CORE_DIR', '/var/www/html');
 /* That's all, stop editing! Happy publishing. */
 
 if (! defined('ABSPATH')) {
-    define('ABSPATH', __DIR__.'/');
+    define('ABSPATH', __DIR__ . '/');
 }
 
-require_once ABSPATH.'wp-settings.php';
+require_once ABSPATH . 'wp-settings.php';

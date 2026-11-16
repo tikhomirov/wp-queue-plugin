@@ -37,7 +37,7 @@ class MemcachedQueue implements QueueInterface
     protected array $config;
 
     /**
-     * @param  array<string, mixed>  $config  Optional config override
+     * @param array<string, mixed> $config Optional config override
      */
     public function __construct(array $config = [])
     {
@@ -47,15 +47,15 @@ class MemcachedQueue implements QueueInterface
     /**
      * Resolve configuration.
      *
-     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>                           $config
      * @return array{host: string, port: int, prefix: string}
      */
     protected function resolveConfig(array $config): array
     {
         return [
-            'host' => $config['host'] ?? (defined('WP_MEMCACHED_HOST') ? WP_MEMCACHED_HOST : '127.0.0.1'),
-            'port' => (int) ($config['port'] ?? (defined('WP_MEMCACHED_PORT') ? WP_MEMCACHED_PORT : 11211)),
-            'prefix' => $config['prefix'] ?? (defined('WP_MEMCACHED_PREFIX') ? WP_MEMCACHED_PREFIX.self::PREFIX : self::PREFIX),
+            'host'   => $config['host'] ?? (defined('WP_MEMCACHED_HOST') ? WP_MEMCACHED_HOST : '127.0.0.1'),
+            'port'   => (int) ($config['port'] ?? (defined('WP_MEMCACHED_PORT') ? WP_MEMCACHED_PORT : 11211)),
+            'prefix' => $config['prefix'] ?? (defined('WP_MEMCACHED_PREFIX') ? WP_MEMCACHED_PREFIX . self::PREFIX : self::PREFIX),
         ];
     }
 
@@ -87,7 +87,7 @@ class MemcachedQueue implements QueueInterface
 
         // Check connection
         $stats = $this->memcached->getStats();
-        $serverKey = $this->config['host'].':'.$this->config['port'];
+        $serverKey = $this->config['host'] . ':' . $this->config['port'];
 
         if (empty($stats) || ! isset($stats[$serverKey])) {
             throw new \RuntimeException('Failed to connect to Memcached server.');
@@ -125,9 +125,9 @@ class MemcachedQueue implements QueueInterface
     public function getConnectionInfo(): array
     {
         return [
-            'host' => $this->config['host'],
-            'port' => $this->config['port'],
-            'prefix' => $this->config['prefix'],
+            'host'      => $this->config['host'],
+            'port'      => $this->config['port'],
+            'prefix'    => $this->config['prefix'],
             'connected' => $this->connected,
             'extension' => extension_loaded('memcached') ? phpversion('memcached') : 'not installed',
         ];
@@ -139,12 +139,12 @@ class MemcachedQueue implements QueueInterface
         $availableAt = time() + $job->getDelay();
 
         $data = [
-            'id' => $job->getId(),
-            'payload' => serialize($job),
+            'id'           => $job->getId(),
+            'payload'      => serialize($job),
             'available_at' => $availableAt,
-            'reserved_at' => null,
-            'attempts' => $job->getAttempts(),
-            'created_at' => time(),
+            'reserved_at'  => null,
+            'attempts'     => $job->getAttempts(),
+            'created_at'   => time(),
         ];
 
         // Get current queue
@@ -259,7 +259,7 @@ class MemcachedQueue implements QueueInterface
     /**
      * Save queue data.
      *
-     * @param  array<string, array{id: string, payload: string, available_at: int, reserved_at: int|null, attempts: int, created_at: int}>  $jobs
+     * @param array<string, array{id: string, payload: string, available_at: int, reserved_at: int|null, attempts: int, created_at: int}> $jobs
      */
     protected function saveQueueData(string $queue, array $jobs): void
     {
@@ -299,7 +299,7 @@ class MemcachedQueue implements QueueInterface
 
     protected function queueKey(string $queue): string
     {
-        return 'jobs:'.$queue;
+        return 'jobs:' . $queue;
     }
 
     /**
@@ -322,9 +322,9 @@ class MemcachedQueue implements QueueInterface
         }
 
         return [
-            'pending' => $pending,
+            'pending'  => $pending,
             'reserved' => $reserved,
-            'total' => count($jobs),
+            'total'    => count($jobs),
         ];
     }
 

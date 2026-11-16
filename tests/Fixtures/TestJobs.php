@@ -43,7 +43,7 @@ class JobWithParameters extends Job
     public function __serialize(): array
     {
         return array_merge(parent::__serialize(), [
-            'name' => $this->name,
+            'name'  => $this->name,
             'value' => $this->value,
         ]);
     }
@@ -122,7 +122,7 @@ class SendEmailJob extends Job
     public function __serialize(): array
     {
         return array_merge(parent::__serialize(), [
-            'to' => $this->to,
+            'to'      => $this->to,
             'subject' => $this->subject,
             'message' => $this->message,
         ]);
@@ -347,7 +347,7 @@ class RetryableJob extends Job
     {
         self::$globalAttempts++;
         if (self::$globalAttempts <= $this->failTimes) {
-            throw new \Exception('Attempt '.self::$globalAttempts.' failed');
+            throw new \Exception('Attempt ' . self::$globalAttempts . ' failed');
         }
         update_option('wp_queue_retryable_success', true);
     }
@@ -417,7 +417,7 @@ class SlowJob extends Job
     public function __serialize(): array
     {
         return array_merge(parent::__serialize(), [
-            'sleepMs' => $this->sleepMs,
+            'sleepMs'    => $this->sleepMs,
             'optionName' => $this->optionName,
         ]);
     }
@@ -452,7 +452,7 @@ class OrderedJob extends Job
     public function __serialize(): array
     {
         return array_merge(parent::__serialize(), [
-            'order' => $this->order,
+            'order'      => $this->order,
             'optionName' => $this->optionName,
         ]);
     }
