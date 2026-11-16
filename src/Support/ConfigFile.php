@@ -247,7 +247,7 @@ final class ConfigFile
 
         @chmod($backup, $perms & 0770);
 
-        if (@file_put_contents($tmp, $new, LOCK_EX) !== mb_strlen($new)) {
+        if (@file_put_contents($tmp, $new, LOCK_EX) !== strlen($new)) {
             @unlink($tmp);
             @unlink($backup);
 
