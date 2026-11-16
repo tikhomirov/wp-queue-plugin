@@ -298,7 +298,7 @@ if (! function_exists('site_url')) {
 if (! function_exists('admin_url')) {
     function admin_url(string $path = ''): string
     {
-        return 'https://example.com/wp-admin/' . mb_ltrim($path, '/');
+        return 'https://example.com/wp-admin/' . ltrim($path, '/');
     }
 }
 
@@ -711,7 +711,7 @@ if (! function_exists('register_rest_route')) {
     {
         $methods = $args['methods'] ?? 'GET';
         $methods = is_array($methods) ? $methods : explode('|', $methods);
-        $pattern = '#^/' . mb_trim($namespace, '/') . $route . '$#';
+        $pattern = '#^/' . trim($namespace, '/') . $route . '$#';
 
         $GLOBALS['wp_rest_routes'][] = [
             'pattern'             => $pattern,
