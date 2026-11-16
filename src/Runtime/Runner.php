@@ -62,11 +62,11 @@ final class Runner
     public static function normalize(string $value): string
     {
         return match ($value) {
-            'cron_loopback'                                                     => self::LOOPBACK,
-            'cron', 'wpcron', 'wp-cron'                                         => self::WP_CRON,
-            'system_cron', 'cli'                                                => self::DAEMON,
+            'cron_loopback' => self::LOOPBACK,
+            'cron', 'wpcron', 'wp-cron' => self::WP_CRON,
+            'system_cron', 'cli' => self::DAEMON,
             self::DAEMON, self::LOOPBACK, self::WP_CRON, self::SYNC, self::AUTO => $value,
-            default                                                             => self::AUTO,
+            default => self::AUTO,
         };
     }
 

@@ -511,8 +511,8 @@ class QueueCommand
     {
         $toConfig = match ($assocArgs['store'] ?? null) {
             'wp-config', 'config' => true,
-            'option'              => false,
-            default               => null,
+            'option' => false,
+            default  => null,
         };
 
         if (isset($assocArgs['driver'])) {
