@@ -14,7 +14,7 @@ if (! defined('ABSPATH')) {
 class ChainedJob extends Job
 {
     /**
-     * @param  JobInterface[]  $remainingJobs
+     * @param JobInterface[] $remainingJobs
      */
     public function __construct(
         protected JobInterface $currentJob,

@@ -32,20 +32,20 @@ define('WP_QUEUE_PATH', plugin_dir_path(__FILE__));
 define('WP_QUEUE_URL', plugin_dir_url(__FILE__));
 
 // Autoload: Composer (dev) or custom PSR-4 (production)
-if (file_exists(WP_QUEUE_PATH.'vendor/autoload.php')) {
-    require_once WP_QUEUE_PATH.'vendor/autoload.php';
+if (file_exists(WP_QUEUE_PATH . 'vendor/autoload.php')) {
+    require_once WP_QUEUE_PATH . 'vendor/autoload.php';
 } else {
     spl_autoload_register(static function (string $class): void {
         $prefix = 'WPQueue\\';
-        $baseDir = WP_QUEUE_PATH.'src/';
+        $baseDir = WP_QUEUE_PATH . 'src/';
 
-        $len = strlen($prefix);
+        $len = mb_strlen($prefix);
         if (strncmp($prefix, $class, $len) !== 0) {
             return;
         }
 
-        $relativeClass = substr($class, $len);
-        $file = $baseDir.str_replace('\\', '/', $relativeClass).'.php';
+        $relativeClass = mb_substr($class, $len);
+        $file = $baseDir . str_replace('\\', '/', $relativeClass) . '.php';
 
         if (file_exists($file)) {
             require_once $file;
@@ -58,21 +58,21 @@ add_action('after_setup_theme', static function (): void {
     load_plugin_textdomain(
         'wp-queue',
         false,
-        dirname(plugin_basename(__FILE__)).'/languages/',
+        dirname(plugin_basename(__FILE__)) . '/languages/',
     );
 }, 1);
 
 // Bootstrap after text domain is loaded
 add_action('after_setup_theme', static function (): void {
-    \WPQueue\WPQueue::boot();
+    WPQueue\WPQueue::boot();
 }, 2);
 
 // Activation
 register_activation_hook(__FILE__, static function (): void {
-    \WPQueue\WPQueue::activate();
+    WPQueue\WPQueue::activate();
 });
 
 // Deactivation
 register_deactivation_hook(__FILE__, static function (): void {
-    \WPQueue\WPQueue::deactivate();
+    WPQueue\WPQueue::deactivate();
 });

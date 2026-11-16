@@ -46,14 +46,14 @@ beforeEach(function (): void {
     FailingWorkerJob::$failedCalled = false;
 
     Brain\Monkey\Functions\stubs([
-        'get_site_option' => fn () => [],
-        'update_site_option' => fn () => true,
-        'delete_site_option' => fn () => true,
-        'get_site_transient' => fn () => false,
-        'set_site_transient' => fn () => true,
+        'get_site_option'       => fn () => [],
+        'update_site_option'    => fn () => true,
+        'delete_site_option'    => fn () => true,
+        'get_site_transient'    => fn () => false,
+        'set_site_transient'    => fn () => true,
         'delete_site_transient' => fn () => true,
-        'do_action' => fn () => null,
-        'apply_filters' => fn ($hook, $value) => $value,
+        'do_action'             => fn () => null,
+        'apply_filters'         => fn ($hook, $value) => $value,
     ]);
 });
 

@@ -118,7 +118,7 @@ describe('Only the selected runner starts workers', function (): void {
         Functions\when('wp_next_scheduled')->justReturn(false);
         Functions\when('spawn_cron')->justReturn(null);
         Functions\when('admin_url')->justReturn('https://example.com/wp-admin/admin-ajax.php');
-        Functions\when('add_query_arg')->alias(fn (array $args, string $url) => $url.'?'.http_build_query($args));
+        Functions\when('add_query_arg')->alias(fn (array $args, string $url) => $url . '?' . http_build_query($args));
         Functions\when('wp_create_nonce')->justReturn('nonce');
         Functions\when('esc_url_raw')->returnArg();
         Functions\when('home_url')->justReturn('https://example.com');
@@ -131,18 +131,18 @@ describe('Only the selected runner starts workers', function (): void {
         Trigger::reset();
 
         // LoopbackDispatcher remembers spawned queues per request.
-        LoopbackDispatcher::forget('q-'.$runner);
-        Trigger::afterDispatch('q-'.$runner);
+        LoopbackDispatcher::forget('q-' . $runner);
+        Trigger::afterDispatch('q-' . $runner);
 
         expect($this->calls['loopback'])->toBe($expected['loopback'])
             ->and($this->calls['schedule'])->toBe($expected['schedule'])
             ->and(Trigger::state())->toBe($expected['state'])
             ->and(LoopbackDispatcher::isEnabled())->toBe($runner === Runner::LOOPBACK);
     })->with([
-        'daemon' => [Runner::DAEMON, ['loopback' => 0, 'schedule' => 0, 'state' => ['spawn_cron' => false, 'sync' => false]]],
+        'daemon'   => [Runner::DAEMON, ['loopback' => 0, 'schedule' => 0, 'state' => ['spawn_cron' => false, 'sync' => false]]],
         'loopback' => [Runner::LOOPBACK, ['loopback' => 1, 'schedule' => 0, 'state' => ['spawn_cron' => false, 'sync' => false]]],
-        'wp_cron' => [Runner::WP_CRON, ['loopback' => 0, 'schedule' => 1, 'state' => ['spawn_cron' => true, 'sync' => false]]],
-        'sync' => [Runner::SYNC, ['loopback' => 0, 'schedule' => 0, 'state' => ['spawn_cron' => false, 'sync' => true]]],
+        'wp_cron'  => [Runner::WP_CRON, ['loopback' => 0, 'schedule' => 1, 'state' => ['spawn_cron' => true, 'sync' => false]]],
+        'sync'     => [Runner::SYNC, ['loopback' => 0, 'schedule' => 0, 'state' => ['spawn_cron' => false, 'sync' => true]]],
     ]);
 
     it('does not spawn wp-cron.php with DISABLE_WP_CRON', function (): void {
@@ -159,17 +159,17 @@ describe('Only the selected runner starts workers', function (): void {
 
 describe('Settings sources', function (): void {
     it('treats a constant inside the WP Queue block as editable', function (): void {
-        $dir = sys_get_temp_dir().'/wpq-settings-'.bin2hex(random_bytes(3));
+        $dir = sys_get_temp_dir() . '/wpq-settings-' . bin2hex(random_bytes(3));
         mkdir($dir);
-        file_put_contents($dir.'/wp-config.php', "<?php\n".ConfigFile::block(['WP_QUEUE_RUNNER' => 'daemon'])."/* That's all, stop editing! */\n");
-        ConfigFile::$path = $dir.'/wp-config.php';
+        file_put_contents($dir . '/wp-config.php', "<?php\n" . ConfigFile::block(['WP_QUEUE_RUNNER' => 'daemon']) . "/* That's all, stop editing! */\n");
+        ConfigFile::$path = $dir . '/wp-config.php';
         ConfigFile::resetCache();
         withConstants(['WP_QUEUE_RUNNER' => 'daemon']);
 
         expect(Settings::runner()['source'])->toBe(Settings::SOURCE_MANAGED)
             ->and(Settings::isLocked('runner'))->toBeFalse();
 
-        array_map('unlink', glob($dir.'/{,.}*.php', GLOB_BRACE) ?: []);
+        array_map('unlink', glob($dir . '/{,.}*.php', GLOB_BRACE) ?: []);
         rmdir($dir);
     });
 });

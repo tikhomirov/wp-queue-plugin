@@ -47,12 +47,12 @@ class DatabaseQueue implements InspectableQueue, QueueInterface, TransferableQue
         Schema::ensure();
 
         $wpdb->insert(Schema::jobsTable(), [
-            'job_id' => $job->getId(),
-            'queue' => $job->getQueue() ?: 'default',
-            'payload' => $this->encode($job),
-            'attempts' => $job->getAttempts(),
+            'job_id'       => $job->getId(),
+            'queue'        => $job->getQueue() ?: 'default',
+            'payload'      => $this->encode($job),
+            'attempts'     => $job->getAttempts(),
             'available_at' => time() + $job->getDelay(),
-            'created_at' => time(),
+            'created_at'   => time(),
         ], ['%s', '%s', '%s', '%d', '%d', '%d']);
 
         return $job->getId();
@@ -207,10 +207,10 @@ class DatabaseQueue implements InspectableQueue, QueueInterface, TransferableQue
         $jobs = [];
         foreach ((array) $rows as $row) {
             $jobs[(string) $row['job_id']] = [
-                'payload' => (string) base64_decode((string) $row['payload'], true),
+                'payload'      => (string) base64_decode((string) $row['payload'], true),
                 'available_at' => (int) $row['available_at'],
-                'reserved_at' => $row['reserved_at'] === null ? null : (int) $row['reserved_at'],
-                'attempts' => (int) $row['attempts'],
+                'reserved_at'  => $row['reserved_at'] === null ? null : (int) $row['reserved_at'],
+                'attempts'     => (int) $row['attempts'],
             ];
         }
 

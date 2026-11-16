@@ -133,7 +133,7 @@ describe('DatabaseQueue storage', function (): void {
             $ids[] = $job->getId();
         }
 
-        $script = dirname(__DIR__).'/Support/concurrent-worker.php';
+        $script = dirname(__DIR__) . '/Support/concurrent-worker.php';
         $processes = [];
         for ($w = 0; $w < 4; $w++) {
             $processes[] = proc_open([PHP_BINARY, $script, $file], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes[$w]);
@@ -149,8 +149,8 @@ describe('DatabaseQueue storage', function (): void {
         }
 
         @unlink($file);
-        @unlink($file.'-wal');
-        @unlink($file.'-shm');
+        @unlink($file . '-wal');
+        @unlink($file . '-shm');
 
         expect(count($handled))->toBe(120)
             ->and(count(array_unique($handled)))->toBe(120)

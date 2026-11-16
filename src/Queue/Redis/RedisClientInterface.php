@@ -126,7 +126,7 @@ interface RedisClientInterface
     /**
      * Delete keys.
      *
-     * @param  string[]  $keys
+     * @param string[] $keys
      */
     public function del(array $keys): int;
 
@@ -145,8 +145,8 @@ interface RedisClientInterface
     /**
      * Run a Lua script atomically. Keys are prefixed like every other command.
      *
-     * @param  list<string>  $keys
-     * @param  list<string|int|float>  $args
+     * @param list<string>           $keys
+     * @param list<string|int|float> $args
      */
     public function evalScript(string $script, array $keys, array $args = []): mixed;
 

@@ -8,8 +8,8 @@ use WPQueue\QueueManager;
 describe('QueueManager Redis Status', function (): void {
     beforeEach(function (): void {
         Brain\Monkey\Functions\stubs([
-            '__' => fn ($text, $domain = 'default') => $text,
-            'get_site_option' => fn () => false,
+            '__'                 => fn ($text, $domain = 'default') => $text,
+            'get_site_option'    => fn () => false,
             'update_site_option' => fn () => true,
         ]);
     });
@@ -111,8 +111,8 @@ describe('QueueManager Redis Status', function (): void {
 describe('QueueManager Redis with Plugin', function (): void {
     beforeEach(function (): void {
         Brain\Monkey\Functions\stubs([
-            '__' => fn ($text, $domain = 'default') => $text,
-            'get_site_option' => fn () => false,
+            '__'                 => fn ($text, $domain = 'default') => $text,
+            'get_site_option'    => fn () => false,
             'update_site_option' => fn () => true,
         ]);
     });

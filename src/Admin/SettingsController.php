@@ -67,7 +67,7 @@ final class SettingsController
         Runner::reset();
 
         if ($result['ok'] && $runner === Runner::DAEMON && ! Runner::availability(Runner::DAEMON)['available']) {
-            $result['message'] .= ' '.__('No fresh heartbeat from the daemon / system cron yet: add the crontab line shown below, otherwise jobs will not run.', 'wp-queue');
+            $result['message'] .= ' ' . __('No fresh heartbeat from the daemon / system cron yet: add the crontab line shown below, otherwise jobs will not run.', 'wp-queue');
             $result['warning'] = true;
         }
 
@@ -101,16 +101,16 @@ final class SettingsController
     }
 
     /**
-     * @param  array<string, mixed>  $result
+     * @param array<string, mixed> $result
      */
     public static function flash(array $result): void
     {
-        set_transient('wp_queue_notice_'.get_current_user_id(), $result, 120);
+        set_transient('wp_queue_notice_' . get_current_user_id(), $result, 120);
     }
 
     public static function renderNotice(): void
     {
-        $key = 'wp_queue_notice_'.get_current_user_id();
+        $key = 'wp_queue_notice_' . get_current_user_id();
         $notice = get_transient($key);
 
         if (! is_array($notice)) {
@@ -172,7 +172,7 @@ final class SettingsController
 
     private function back(string $tab, string $section): never
     {
-        wp_safe_redirect(admin_url('admin.php?page=wp-queue&tab='.$tab.'&section='.$section));
+        wp_safe_redirect(admin_url('admin.php?page=wp-queue&tab=' . $tab . '&section=' . $section));
         exit;
     }
 }

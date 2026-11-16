@@ -123,7 +123,7 @@ final class Settings
     }
 
     /**
-     * @param  array<string, mixed>  $values
+     * @param array<string, mixed> $values
      */
     public static function updateOption(array $values): void
     {

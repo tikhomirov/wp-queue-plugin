@@ -56,15 +56,15 @@ class CronMonitor
             foreach ($cronhooks as $hook => $keys) {
                 foreach ($keys as $key => $data) {
                     $events[] = [
-                        'hook' => $hook,
-                        'timestamp' => (int) $timestamp,
-                        'schedule' => $data['schedule'] ?? false,
-                        'interval' => $data['interval'] ?? null,
-                        'args' => $data['args'] ?? [],
-                        'sig' => $key,
-                        'next_run' => $this->formatNextRun((int) $timestamp),
+                        'hook'       => $hook,
+                        'timestamp'  => (int) $timestamp,
+                        'schedule'   => $data['schedule'] ?? false,
+                        'interval'   => $data['interval'] ?? null,
+                        'args'       => $data['args'] ?? [],
+                        'sig'        => $key,
+                        'next_run'   => $this->formatNextRun((int) $timestamp),
                         'is_overdue' => $timestamp < $now,
-                        'source' => $this->identifySource($hook),
+                        'source'     => $this->identifySource($hook),
                     ];
                 }
             }
@@ -238,10 +238,10 @@ class CronMonitor
         $now = time();
 
         $stats = [
-            'total' => count($events),
-            'overdue' => 0,
-            'paused' => $this->getPausedCount(),
-            'by_source' => [],
+            'total'       => count($events),
+            'overdue'     => 0,
+            'paused'      => $this->getPausedCount(),
+            'by_source'   => [],
             'by_schedule' => [],
         ];
 
@@ -273,13 +273,13 @@ class CronMonitor
 
         // Store paused event
         $paused = get_option('wp_queue_paused_crons', []);
-        $key = md5($hook.serialize($args));
+        $key = md5($hook . serialize($args));
 
         $paused[$key] = [
-            'hook' => $hook,
-            'args' => $args,
-            'schedule' => $event['schedule'],
-            'interval' => $event['interval'],
+            'hook'      => $hook,
+            'args'      => $args,
+            'schedule'  => $event['schedule'],
+            'interval'  => $event['interval'],
             'paused_at' => time(),
         ];
 
@@ -297,7 +297,7 @@ class CronMonitor
     public function resume(string $hook, array $args = []): bool
     {
         $paused = get_option('wp_queue_paused_crons', []);
-        $key = md5($hook.serialize($args));
+        $key = md5($hook . serialize($args));
 
         if (! isset($paused[$key])) {
             return false;
@@ -343,7 +343,7 @@ class CronMonitor
     public function isPaused(string $hook, array $args = []): bool
     {
         $paused = $this->getPaused();
-        $key = md5($hook.serialize($args));
+        $key = md5($hook . serialize($args));
 
         return isset($paused[$key]);
     }
@@ -392,11 +392,11 @@ class CronMonitor
         $data = $crons[$timestamp][$hook][$sig];
 
         return [
-            'hook' => $hook,
+            'hook'      => $hook,
             'timestamp' => $timestamp,
-            'schedule' => $data['schedule'] ?? false,
-            'interval' => $data['interval'] ?? null,
-            'args' => $data['args'] ?? [],
+            'schedule'  => $data['schedule'] ?? false,
+            'interval'  => $data['interval'] ?? null,
+            'args'      => $data['args'] ?? [],
         ];
     }
 }

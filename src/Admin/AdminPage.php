@@ -38,30 +38,30 @@ class AdminPage
     public function initTabs(): void
     {
         $this->tabs = [
-            'queues' => ['title' => __('Queues', 'wp-queue'), 'icon' => 'dashicons-database'],
+            'queues'    => ['title' => __('Queues', 'wp-queue'), 'icon' => 'dashicons-database'],
             'scheduler' => ['title' => __('Scheduler', 'wp-queue'), 'icon' => 'dashicons-clock'],
-            'system' => ['title' => __('System', 'wp-queue'), 'icon' => 'dashicons-admin-tools'],
+            'system'    => ['title' => __('System', 'wp-queue'), 'icon' => 'dashicons-admin-tools'],
         ];
 
         $this->sections = [
             'queues' => [
                 'overview' => ['title' => __('Overview', 'wp-queue'), 'icon' => 'dashicons-chart-bar'],
-                'jobs' => ['title' => __('Jobs in Queue', 'wp-queue'), 'icon' => 'dashicons-list-view'],
-                'history' => ['title' => __('History', 'wp-queue'), 'icon' => 'dashicons-backup'],
-                'failed' => ['title' => __('Failed', 'wp-queue'), 'icon' => 'dashicons-dismiss'],
-                'drivers' => ['title' => __('Drivers', 'wp-queue'), 'icon' => 'dashicons-admin-generic'],
+                'jobs'     => ['title' => __('Jobs in Queue', 'wp-queue'), 'icon' => 'dashicons-list-view'],
+                'history'  => ['title' => __('History', 'wp-queue'), 'icon' => 'dashicons-backup'],
+                'failed'   => ['title' => __('Failed', 'wp-queue'), 'icon' => 'dashicons-dismiss'],
+                'drivers'  => ['title' => __('Drivers', 'wp-queue'), 'icon' => 'dashicons-admin-generic'],
             ],
             'scheduler' => [
-                'overview' => ['title' => __('Overview', 'wp-queue'), 'icon' => 'dashicons-chart-bar'],
-                'events' => ['title' => __('Cron Events', 'wp-queue'), 'icon' => 'dashicons-calendar-alt'],
+                'overview'  => ['title' => __('Overview', 'wp-queue'), 'icon' => 'dashicons-chart-bar'],
+                'events'    => ['title' => __('Cron Events', 'wp-queue'), 'icon' => 'dashicons-calendar-alt'],
                 'scheduled' => ['title' => __('Scheduled', 'wp-queue'), 'icon' => 'dashicons-clock'],
-                'paused' => ['title' => __('Paused', 'wp-queue'), 'icon' => 'dashicons-controls-pause'],
+                'paused'    => ['title' => __('Paused', 'wp-queue'), 'icon' => 'dashicons-controls-pause'],
             ],
             'system' => [
                 'status' => ['title' => __('System Status', 'wp-queue'), 'icon' => 'dashicons-heart'],
                 'daemon' => ['title' => __('Daemon worker', 'wp-queue'), 'icon' => 'dashicons-admin-generic'],
-                'tools' => ['title' => __('Tools', 'wp-queue'), 'icon' => 'dashicons-admin-tools'],
-                'help' => ['title' => __('Help', 'wp-queue'), 'icon' => 'dashicons-editor-help'],
+                'tools'  => ['title' => __('Tools', 'wp-queue'), 'icon' => 'dashicons-admin-tools'],
+                'help'   => ['title' => __('Help', 'wp-queue'), 'icon' => 'dashicons-editor-help'],
             ],
         ];
     }
@@ -88,20 +88,20 @@ class AdminPage
         }
 
         $screen->add_help_tab([
-            'id' => 'wp-queue-about',
-            'title' => __('About WP Queue', 'wp-queue'),
+            'id'      => 'wp-queue-about',
+            'title'   => __('About WP Queue', 'wp-queue'),
             'content' => $this->getHelpTabAbout(),
         ]);
 
         $screen->add_help_tab([
-            'id' => 'wp-queue-usage',
-            'title' => __('Usage', 'wp-queue'),
+            'id'      => 'wp-queue-usage',
+            'title'   => __('Usage', 'wp-queue'),
             'content' => $this->getHelpTabUsage(),
         ]);
 
         $screen->add_help_tab([
-            'id' => 'wp-queue-cli',
-            'title' => __('WP-CLI', 'wp-queue'),
+            'id'      => 'wp-queue-cli',
+            'title'   => __('WP-CLI', 'wp-queue'),
             'content' => $this->getHelpTabCli(),
         ]);
 
@@ -110,44 +110,44 @@ class AdminPage
 
     protected function getHelpTabAbout(): string
     {
-        return '<h2>'.__('About WP Queue', 'wp-queue').' '.WP_QUEUE_VERSION.'</h2>'.
-            '<p>'.__('WP Queue helps your site run heavy or regular tasks in the background (emails, synchronizations, cleanups) so that pages load faster for visitors.', 'wp-queue').'</p>'.
-            '<p>'.__('The plugin itself does not add new features to the frontend. It provides a reliable queue that other plugins or your custom code can use for background work.', 'wp-queue').'</p>'.
-            '<h3>'.__('What you can use it for', 'wp-queue').'</h3>'.
-            '<ul>'.
-            '<li>'.__('Monitor which background jobs are queued and running right now.', 'wp-queue').'</li>'.
-            '<li>'.__('Quickly see if any jobs are failing and view recent log entries.', 'wp-queue').'</li>'.
-            '<li>'.__('Inspect and manage WP-Cron events for WP Queue and other plugins.', 'wp-queue').'</li>'.
-            '<li>'.__('Check basic system requirements that affect queue stability.', 'wp-queue').'</li>'.
-            '</ul>'.
-            '<h3>'.__('For developers', 'wp-queue').'</h3>'.
-            '<p>'.__('Developers can dispatch their own jobs to the queue, choose drivers (Database, Sync, Redis), configure retries and schedules. See the documentation and examples on GitHub for integration details.', 'wp-queue').'</p>';
+        return '<h2>' . __('About WP Queue', 'wp-queue') . ' ' . WP_QUEUE_VERSION . '</h2>' .
+            '<p>' . __('WP Queue helps your site run heavy or regular tasks in the background (emails, synchronizations, cleanups) so that pages load faster for visitors.', 'wp-queue') . '</p>' .
+            '<p>' . __('The plugin itself does not add new features to the frontend. It provides a reliable queue that other plugins or your custom code can use for background work.', 'wp-queue') . '</p>' .
+            '<h3>' . __('What you can use it for', 'wp-queue') . '</h3>' .
+            '<ul>' .
+            '<li>' . __('Monitor which background jobs are queued and running right now.', 'wp-queue') . '</li>' .
+            '<li>' . __('Quickly see if any jobs are failing and view recent log entries.', 'wp-queue') . '</li>' .
+            '<li>' . __('Inspect and manage WP-Cron events for WP Queue and other plugins.', 'wp-queue') . '</li>' .
+            '<li>' . __('Check basic system requirements that affect queue stability.', 'wp-queue') . '</li>' .
+            '</ul>' .
+            '<h3>' . __('For developers', 'wp-queue') . '</h3>' .
+            '<p>' . __('Developers can dispatch their own jobs to the queue, choose drivers (Database, Sync, Redis), configure retries and schedules. See the documentation and examples on GitHub for integration details.', 'wp-queue') . '</p>';
     }
 
     protected function getHelpTabUsage(): string
     {
-        return '<h2>'.__('Basic Usage', 'wp-queue').'</h2>'.
-            '<h3>'.__('For site administrators', 'wp-queue').'</h3>'.
-            '<ul>'.
-            '<li>'.__('Dashboard – quick overview of queues, number of jobs and recent activity.', 'wp-queue').'</li>'.
-            '<li>'.__('Scheduled Jobs – list of recurring background jobs added by your theme or plugins.', 'wp-queue').'</li>'.
-            '<li>'.__('Logs – history of completed and failed jobs that helps to diagnose problems.', 'wp-queue').'</li>'.
-            '<li>'.__('WP-Cron – list of cron events with the ability to run, pause or delete them.', 'wp-queue').'</li>'.
-            '<li>'.__('System – checks PHP version, WP-Cron status and other important settings.', 'wp-queue').'</li>'.
-            '</ul>'.
-            '<p>'.__('If you installed WP Queue because another plugin requires it, you usually do not need to configure anything here. Use these tabs mainly for monitoring and troubleshooting.', 'wp-queue').'</p>'.
-            '<h3>'.__('For developers', 'wp-queue').'</h3>'.
-            '<p>'.sprintf(
+        return '<h2>' . __('Basic Usage', 'wp-queue') . '</h2>' .
+            '<h3>' . __('For site administrators', 'wp-queue') . '</h3>' .
+            '<ul>' .
+            '<li>' . __('Dashboard – quick overview of queues, number of jobs and recent activity.', 'wp-queue') . '</li>' .
+            '<li>' . __('Scheduled Jobs – list of recurring background jobs added by your theme or plugins.', 'wp-queue') . '</li>' .
+            '<li>' . __('Logs – history of completed and failed jobs that helps to diagnose problems.', 'wp-queue') . '</li>' .
+            '<li>' . __('WP-Cron – list of cron events with the ability to run, pause or delete them.', 'wp-queue') . '</li>' .
+            '<li>' . __('System – checks PHP version, WP-Cron status and other important settings.', 'wp-queue') . '</li>' .
+            '</ul>' .
+            '<p>' . __('If you installed WP Queue because another plugin requires it, you usually do not need to configure anything here. Use these tabs mainly for monitoring and troubleshooting.', 'wp-queue') . '</p>' .
+            '<h3>' . __('For developers', 'wp-queue') . '</h3>' .
+            '<p>' . sprintf(
                 /* translators: %s: URL to GitHub repository */
                 __('To add your own background jobs, use the WP Queue PHP API from your plugin or theme. You can dispatch jobs to different queues, set delays and retries. Full code examples are available in the <a href="%s" target="_blank">README on GitHub</a>.', 'wp-queue'),
                 esc_url('https://github.com/rwsite/wp-queue'),
-            ).'</p>';
+            ) . '</p>';
     }
 
     protected function getHelpTabCli(): string
     {
-        return '<h2>'.__('WP-CLI Commands', 'wp-queue').'</h2>'.
-            '<p>'.__('Run', 'wp-queue').' <code>wp help queue</code> '.__('to get a list of available commands.', 'wp-queue').'</p>'.
+        return '<h2>' . __('WP-CLI Commands', 'wp-queue') . '</h2>' .
+            '<p>' . __('Run', 'wp-queue') . ' <code>wp help queue</code> ' . __('to get a list of available commands.', 'wp-queue') . '</p>' .
             '<pre><code># Queue commands
 wp queue status              # Show queue status
 wp queue work [queue]        # Process jobs from queue
@@ -168,10 +168,10 @@ wp queue system              # Show system status</code></pre>';
 
     protected function getHelpSidebar(): string
     {
-        return '<p><strong>'.__('For more information:', 'wp-queue').'</strong></p>'.
-            '<p><a href="https://github.com/rwsite/wp-queue" target="_blank">'.__('GitHub Repository', 'wp-queue').'</a></p>'.
-            '<p><a href="https://github.com/rwsite/wp-queue/issues" target="_blank">'.__('Report Issues', 'wp-queue').'</a></p>'.
-            '<p><a href="https://rwsite.ru" target="_blank">'.__('Author Website', 'wp-queue').'</a></p>';
+        return '<p><strong>' . __('For more information:', 'wp-queue') . '</strong></p>' .
+            '<p><a href="https://github.com/rwsite/wp-queue" target="_blank">' . __('GitHub Repository', 'wp-queue') . '</a></p>' .
+            '<p><a href="https://github.com/rwsite/wp-queue/issues" target="_blank">' . __('Report Issues', 'wp-queue') . '</a></p>' .
+            '<p><a href="https://rwsite.ru" target="_blank">' . __('Author Website', 'wp-queue') . '</a></p>';
     }
 
     public function enqueueAssets(string $hook): void
@@ -182,14 +182,14 @@ wp queue system              # Show system status</code></pre>';
 
         wp_enqueue_style(
             'wp-queue-admin',
-            WP_QUEUE_URL.'assets/css/admin.css',
+            WP_QUEUE_URL . 'assets/css/admin.css',
             [],
             WP_QUEUE_VERSION,
         );
 
         wp_enqueue_script(
             'wp-queue-admin',
-            WP_QUEUE_URL.'assets/js/admin.js',
+            WP_QUEUE_URL . 'assets/js/admin.js',
             ['jquery'],
             WP_QUEUE_VERSION,
             true,
@@ -198,12 +198,12 @@ wp queue system              # Show system status</code></pre>';
         wp_localize_script('wp-queue-admin', 'wpQueue', [
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'restUrl' => rest_url('wp-queue/v1'),
-            'nonce' => wp_create_nonce('wp_rest'),
-            'i18n' => [
+            'nonce'   => wp_create_nonce('wp_rest'),
+            'i18n'    => [
                 'confirm_clear' => __('Are you sure you want to clear this queue?', 'wp-queue'),
                 'confirm_pause' => __('Pause this queue?', 'wp-queue'),
-                'success' => __('Action completed successfully', 'wp-queue'),
-                'error' => __('An error occurred', 'wp-queue'),
+                'success'       => __('Action completed successfully', 'wp-queue'),
+                'error'         => __('An error occurred', 'wp-queue'),
             ],
         ]);
     }
@@ -254,9 +254,9 @@ wp queue system              # Show system status</code></pre>';
         $breadcrumb = '';
 
         if ($queueView) {
-            $breadcrumb = '/ '.esc_html($tabTitle).' / <a href="'.esc_url(admin_url('admin.php?page=wp-queue&tab=queues&section=overview')).'">'.esc_html__('Overview', 'wp-queue').'</a> / '.esc_html($queueView);
+            $breadcrumb = '/ ' . esc_html($tabTitle) . ' / <a href="' . esc_url(admin_url('admin.php?page=wp-queue&tab=queues&section=overview')) . '">' . esc_html__('Overview', 'wp-queue') . '</a> / ' . esc_html($queueView);
         } else {
-            $breadcrumb = '/ '.esc_html($tabTitle).' / '.esc_html($sectionTitle);
+            $breadcrumb = '/ ' . esc_html($tabTitle) . ' / ' . esc_html($sectionTitle);
         }
         ?>
         <div class="wp-queue-header">
@@ -278,7 +278,7 @@ wp queue system              # Show system status</code></pre>';
         ?>
         <nav class="wp-queue-tabs">
             <?php foreach ($this->tabs as $tabKey => $tabData) { ?>
-                <a href="<?php echo esc_url(admin_url('admin.php?page=wp-queue&tab='.$tabKey)); ?>"
+                <a href="<?php echo esc_url(admin_url('admin.php?page=wp-queue&tab=' . $tabKey)); ?>"
                     class="wp-queue-tab <?php echo $currentTab === $tabKey ? 'active' : ''; ?>">
                     <span class="dashicons <?php echo esc_attr($tabData['icon']); ?>"></span>
                     <?php echo esc_html($tabData['title']); ?>
@@ -293,7 +293,7 @@ wp queue system              # Show system status</code></pre>';
         ?>
         <div class="wp-queue-sidebar">
             <?php foreach ($this->sections[$tab] as $sectionKey => $sectionData) { ?>
-                <a href="<?php echo esc_url(admin_url('admin.php?page=wp-queue&tab='.$tab.'&section='.$sectionKey)); ?>"
+                <a href="<?php echo esc_url(admin_url('admin.php?page=wp-queue&tab=' . $tab . '&section=' . $sectionKey)); ?>"
                     class="wp-queue-sidebar-item <?php echo $currentSection === $sectionKey ? 'active' : ''; ?>">
                     <span class="dashicons <?php echo esc_attr($sectionData['icon']); ?>"></span>
                     <?php echo esc_html($sectionData['title']); ?>
@@ -305,7 +305,7 @@ wp queue system              # Show system status</code></pre>';
 
     private function renderSectionContent(string $tab, string $section): void
     {
-        $method = 'render'.ucfirst($tab).ucfirst($section);
+        $method = 'render' . ucfirst($tab) . ucfirst($section);
         if (method_exists($this, $method)) {
             $this->$method();
         } else {
@@ -326,13 +326,13 @@ wp queue system              # Show system status</code></pre>';
     private function getStatusLabel(string $status): string
     {
         return match ($status) {
-            'idle' => __('Idle', 'wp-queue'),
-            'pending' => __('Pending', 'wp-queue'),
-            'running' => __('Running', 'wp-queue'),
-            'paused' => __('Paused', 'wp-queue'),
+            'idle'      => __('Idle', 'wp-queue'),
+            'pending'   => __('Pending', 'wp-queue'),
+            'running'   => __('Running', 'wp-queue'),
+            'paused'    => __('Paused', 'wp-queue'),
             'completed' => __('Completed', 'wp-queue'),
-            'failed' => __('Failed', 'wp-queue'),
-            default => ucfirst($status),
+            'failed'    => __('Failed', 'wp-queue'),
+            default     => ucfirst($status),
         };
     }
 
@@ -384,7 +384,7 @@ wp queue system              # Show system status</code></pre>';
             <h2><?php echo esc_html__('Queues', 'wp-queue'); ?></h2>
             <div class="wp-queue-cards">
                 <?php foreach ($queues as $name => $data) { ?>
-                    <a href="<?php echo esc_url(admin_url('admin.php?page=wp-queue&tab=queues&queue='.urlencode($name))); ?>" class="queue-card queue-card-<?php echo esc_attr($data['status']); ?>">
+                    <a href="<?php echo esc_url(admin_url('admin.php?page=wp-queue&tab=queues&queue=' . urlencode($name))); ?>" class="queue-card queue-card-<?php echo esc_attr($data['status']); ?>">
                         <div class="queue-card-header">
                             <span class="queue-card-title"><?php echo esc_html($name); ?></span>
                             <span class="status-badge status-<?php echo esc_attr($data['status']); ?>">
@@ -506,7 +506,7 @@ wp queue system              # Show system status</code></pre>';
                     <?php } else { ?>
                         <?php foreach ($pagedJobs as $id => $job) { ?>
                             <tr>
-                                <td><code title="<?php echo esc_attr($id); ?>"><?php echo esc_html(substr($id, 0, 8)); ?>...</code></td>
+                                <td><code title="<?php echo esc_attr($id); ?>"><?php echo esc_html(mb_substr($id, 0, 8)); ?>...</code></td>
                                 <td>
                                     <code><?php echo esc_html($job['class'] ?? __('Unknown', 'wp-queue')); ?></code>
                                     <?php if (! empty($job['payload_preview'])) { ?>
@@ -518,7 +518,7 @@ wp queue system              # Show system status</code></pre>';
                                     <?php
                     $availableAt = $job['available_at'] ?? 0;
                             if ($availableAt > time()) {
-                                echo esc_html(human_time_diff($availableAt, time())).' '.esc_html__('from now', 'wp-queue');
+                                echo esc_html(human_time_diff($availableAt, time())) . ' ' . esc_html__('from now', 'wp-queue');
                             } else {
                                 echo esc_html__('Now', 'wp-queue');
                             }
@@ -564,13 +564,13 @@ wp queue system              # Show system status</code></pre>';
                         </span>
                         <span class="pagination-links">
                             <?php
-                            $baseUrl = admin_url('admin.php?page=wp-queue&tab=queues&queue='.urlencode($queueName));
+                            $baseUrl = admin_url('admin.php?page=wp-queue&tab=queues&queue=' . urlencode($queueName));
                 if ($page > 1) {
-                    echo '<a class="prev-page button" href="'.esc_url($baseUrl.'&paged='.($page - 1)).'">‹</a>';
+                    echo '<a class="prev-page button" href="' . esc_url($baseUrl . '&paged=' . ($page - 1)) . '">‹</a>';
                 }
-                echo '<span class="paging-input">'.esc_html($page).' / '.esc_html((string) $totalPages).'</span>';
+                echo '<span class="paging-input">' . esc_html($page) . ' / ' . esc_html((string) $totalPages) . '</span>';
                 if ($page < $totalPages) {
-                    echo '<a class="next-page button" href="'.esc_url($baseUrl.'&paged='.($page + 1)).'">›</a>';
+                    echo '<a class="next-page button" href="' . esc_url($baseUrl . '&paged=' . ($page + 1)) . '">›</a>';
                 }
                 ?>
                         </span>
@@ -623,7 +623,7 @@ wp queue system              # Show system status</code></pre>';
                     <?php } else { ?>
                         <?php foreach ($jobs as $jobClass => $scheduled) { ?>
                             <?php
-                            $hook = 'wp_queue_'.strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', (new \ReflectionClass($jobClass))->getShortName()));
+                            $hook = 'wp_queue_' . mb_strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', (new \ReflectionClass($jobClass))->getShortName()));
                             $nextRun = wp_next_scheduled($hook);
                             ?>
                             <tr>
@@ -833,9 +833,9 @@ wp queue system              # Show system status</code></pre>';
 
         // Получаем все логи
         $allLogs = match ($filter) {
-            'failed' => WPQueue::logs()->failed(),
+            'failed'    => WPQueue::logs()->failed(),
             'completed' => WPQueue::logs()->completed(),
-            default => WPQueue::logs()->recent(500),
+            default     => WPQueue::logs()->recent(500),
         };
 
         // Фильтрация по очереди
@@ -936,16 +936,16 @@ wp queue system              # Show system status</code></pre>';
                         </span>
                         <span class="pagination-links">
                             <?php
-                                $baseUrl = admin_url('admin.php?page=wp-queue&tab=queues&section=history&filter='.$filter);
+                                $baseUrl = admin_url('admin.php?page=wp-queue&tab=queues&section=history&filter=' . $filter);
                 if ($queueFilter) {
-                    $baseUrl .= '&queue_filter='.$queueFilter;
+                    $baseUrl .= '&queue_filter=' . $queueFilter;
                 }
                 if ($page > 1) {
-                    echo '<a class="prev-page button" href="'.esc_url($baseUrl.'&paged='.($page - 1)).'">‹</a>';
+                    echo '<a class="prev-page button" href="' . esc_url($baseUrl . '&paged=' . ($page - 1)) . '">‹</a>';
                 }
-                echo '<span class="paging-input">'.esc_html($page).' / '.esc_html((string) $totalPages).'</span>';
+                echo '<span class="paging-input">' . esc_html($page) . ' / ' . esc_html((string) $totalPages) . '</span>';
                 if ($page < $totalPages) {
-                    echo '<a class="next-page button" href="'.esc_url($baseUrl.'&paged='.($page + 1)).'">›</a>';
+                    echo '<a class="next-page button" href="' . esc_url($baseUrl . '&paged=' . ($page + 1)) . '">›</a>';
                 }
                 ?>
                         </span>
@@ -1001,7 +1001,7 @@ wp queue system              # Show system status</code></pre>';
                                 <td>
                                     <span class="error-message" title="<?php echo esc_attr($log['message'] ?? ''); ?>">
                                         <?php echo esc_html(mb_substr($log['message'] ?? '-', 0, 100)); ?>
-                                        <?php if (strlen($log['message'] ?? '') > 100) {
+                                        <?php if (mb_strlen($log['message'] ?? '') > 100) {
                                             echo '...';
                                         } ?>
                                     </span>
@@ -1019,11 +1019,11 @@ wp queue system              # Show system status</code></pre>';
                             <?php
                             $baseUrl = admin_url('admin.php?page=wp-queue&tab=queues&section=failed');
                 if ($page > 1) {
-                    echo '<a class="prev-page button" href="'.esc_url($baseUrl.'&paged='.($page - 1)).'">‹</a>';
+                    echo '<a class="prev-page button" href="' . esc_url($baseUrl . '&paged=' . ($page - 1)) . '">‹</a>';
                 }
-                echo '<span class="paging-input">'.esc_html($page).' / '.esc_html((string) $totalPages).'</span>';
+                echo '<span class="paging-input">' . esc_html($page) . ' / ' . esc_html((string) $totalPages) . '</span>';
                 if ($page < $totalPages) {
-                    echo '<a class="next-page button" href="'.esc_url($baseUrl.'&paged='.($page + 1)).'">›</a>';
+                    echo '<a class="next-page button" href="' . esc_url($baseUrl . '&paged=' . ($page + 1)) . '">›</a>';
                 }
                 ?>
                         </span>
@@ -1147,15 +1147,15 @@ wp queue system              # Show system status</code></pre>';
     protected function driverHint(string $driver): string
     {
         return match ($driver) {
-            'database' => __('Works everywhere. Atomic claim with a conditional UPDATE.', 'wp-queue'),
-            'redis' => __('Fast, keeps the database small. Needs a Redis server.', 'wp-queue'),
+            'database'  => __('Works everywhere. Atomic claim with a conditional UPDATE.', 'wp-queue'),
+            'redis'     => __('Fast, keeps the database small. Needs a Redis server.', 'wp-queue'),
             'memcached' => __('Not recommended: jobs cannot be listed or moved and may be evicted.', 'wp-queue'),
-            default => '',
+            default     => '',
         };
     }
 
     /**
-     * @param  array{value: string, source: string, constant: string|null}  $setting
+     * @param array{value: string, source: string, constant: string|null} $setting
      */
     protected function sourceLabel(array $setting): string
     {
@@ -1166,16 +1166,16 @@ wp queue system              # Show system status</code></pre>';
                 (string) $setting['constant'],
             ),
             Settings::SOURCE_MANAGED => __('set in the WP Queue block of wp-config.php (editable here)', 'wp-queue'),
-            Settings::SOURCE_OPTION => __('selected in the admin', 'wp-queue'),
-            default => __('default', 'wp-queue'),
+            Settings::SOURCE_OPTION  => __('selected in the admin', 'wp-queue'),
+            default                  => __('default', 'wp-queue'),
         };
     }
 
     /**
      * Render driver status badge with appropriate styling.
      *
-     * @param  string  $status  Driver status constant
-     * @param  array<string, mixed>  $info  Driver info
+     * @param string               $status Driver status constant
+     * @param array<string, mixed> $info   Driver info
      */
     protected function renderDriverStatusBadge(string $status, array $info): string
     {
@@ -1224,9 +1224,9 @@ wp queue system              # Show system status</code></pre>';
                                 <?php
                                     $icon = match ($log['status']) {
                                         'completed' => '✓',
-                                        'failed' => '✗',
-                                        'retrying' => '↻',
-                                        default => '⟳',
+                                        'failed'    => '✗',
+                                        'retrying'  => '↻',
+                                        default     => '⟳',
                                     };
                         ?>
                                 <span class="log-icon log-<?php echo esc_attr($log['status']); ?>"><?php echo esc_html($icon); ?></span>
@@ -1262,7 +1262,7 @@ wp queue system              # Show system status</code></pre>';
             }
 
             $queues[$queueName] = [
-                'size' => count($jobs),
+                'size'   => count($jobs),
                 'status' => $status,
             ];
         }
@@ -1316,7 +1316,7 @@ wp queue system              # Show system status</code></pre>';
                         if (method_exists($job, 'toArray')) {
                             $arr = $job->toArray();
                             unset($arr['id'], $arr['queue'], $arr['attempts']);
-                            $payloadPreview = substr(wp_json_encode($arr), 0, 100);
+                            $payloadPreview = mb_substr(wp_json_encode($arr), 0, 100);
                         }
                     }
                 } catch (\Throwable $e) {
@@ -1325,10 +1325,10 @@ wp queue system              # Show system status</code></pre>';
             }
 
             $jobs[$id] = [
-                'class' => $class,
-                'attempts' => $data['attempts'] ?? 0,
-                'available_at' => $data['available_at'] ?? 0,
-                'reserved_at' => $data['reserved_at'] ?? null,
+                'class'           => $class,
+                'attempts'        => $data['attempts'] ?? 0,
+                'available_at'    => $data['available_at'] ?? 0,
+                'reserved_at'     => $data['reserved_at'] ?? null,
                 'payload_preview' => $payloadPreview,
             ];
         }
@@ -1337,7 +1337,7 @@ wp queue system              # Show system status</code></pre>';
     }
 
     /**
-     * @param  array<string, array{reserved_at: int|null, available_at: int}>  $jobs
+     * @param array<string, array{reserved_at: int|null, available_at: int}> $jobs
      */
     protected function countPendingJobs(array $jobs): int
     {
@@ -1353,7 +1353,7 @@ wp queue system              # Show system status</code></pre>';
     }
 
     /**
-     * @param  array<string, array{reserved_at: int|null}>  $jobs
+     * @param array<string, array{reserved_at: int|null}> $jobs
      */
     protected function countReservedJobs(array $jobs): int
     {
@@ -1414,7 +1414,7 @@ wp queue system              # Show system status</code></pre>';
             <h2><?php echo esc_html__('Events by Source', 'wp-queue'); ?></h2>
             <div class="wp-queue-cards">
                 <?php foreach ($stats['by_source'] as $source => $count) { ?>
-                    <a href="<?php echo esc_url(admin_url('admin.php?page=wp-queue&tab=scheduler&section=events&filter='.urlencode($source))); ?>" class="queue-card">
+                    <a href="<?php echo esc_url(admin_url('admin.php?page=wp-queue&tab=scheduler&section=events&filter=' . urlencode($source))); ?>" class="queue-card">
                         <div class="queue-card-header">
                             <span class="queue-card-title"><?php echo esc_html(ucfirst($source)); ?></span>
                         </div>
@@ -1467,12 +1467,12 @@ wp queue system              # Show system status</code></pre>';
         $filter = sanitize_key(wp_unslash($_GET['filter'] ?? 'all'));
 
         $events = match ($filter) {
-            'wordpress' => array_filter($monitor->getAllEvents(), fn ($e) => $e['source'] === 'wordpress'),
+            'wordpress'   => array_filter($monitor->getAllEvents(), fn ($e) => $e['source'] === 'wordpress'),
             'woocommerce' => array_filter($monitor->getAllEvents(), fn ($e) => $e['source'] === 'woocommerce'),
-            'wp-queue' => array_filter($monitor->getAllEvents(), fn ($e) => $e['source'] === 'wp-queue'),
-            'plugin' => array_filter($monitor->getAllEvents(), fn ($e) => $e['source'] === 'plugin'),
-            'overdue' => array_filter($monitor->getAllEvents(), fn ($e) => $e['is_overdue']),
-            default => $monitor->getAllEvents(),
+            'wp-queue'    => array_filter($monitor->getAllEvents(), fn ($e) => $e['source'] === 'wp-queue'),
+            'plugin'      => array_filter($monitor->getAllEvents(), fn ($e) => $e['source'] === 'plugin'),
+            'overdue'     => array_filter($monitor->getAllEvents(), fn ($e) => $e['is_overdue']),
+            default       => $monitor->getAllEvents(),
         };
 
         $stats = $monitor->getStats();
@@ -1967,12 +1967,12 @@ wp queue system              # Show system status</code></pre>';
                                                         <?php
                                                         echo $daemonBeat === null
                                                             ? esc_html__('never', 'wp-queue')
-                                                            : esc_html(wp_date('Y-m-d H:i:s', $daemonBeat['at']).' ('.sprintf(
+                                                            : esc_html(wp_date('Y-m-d H:i:s', $daemonBeat['at']) . ' (' . sprintf(
                                                                 /* translators: 1: time ago, 2: jobs */
                                                                 __('%1$s ago, jobs: %2$d', 'wp-queue'),
                                                                 human_time_diff($daemonBeat['at'], time()),
                                                                 $daemonBeat['processed'],
-                                                            ).')'.($daemonBeat['skipped'] ? ' — '.__('skipped: another runner is selected or a worker was busy', 'wp-queue') : ''));
+                                                            ) . ')' . ($daemonBeat['skipped'] ? ' — ' . __('skipped: another runner is selected or a worker was busy', 'wp-queue') : ''));
                                             ?>
                                                     </strong>
                                                 </span>
@@ -2017,13 +2017,13 @@ wp queue system              # Show system status</code></pre>';
                             </span>
                             <?php
                             $lbStatusLabel = match ($loopbackStatus) {
-                                'ok' => __('check OK', 'wp-queue'),
+                                'ok'      => __('check OK', 'wp-queue'),
                                 'warning' => __('check: warning', 'wp-queue'),
-                                'error' => __('check failed', 'wp-queue'),
-                                default => __('not checked', 'wp-queue'),
+                                'error'   => __('check failed', 'wp-queue'),
+                                default   => __('not checked', 'wp-queue'),
                             };
         ?>
-                            <span class="description"><?php echo esc_html($lbStatusLabel); ?><?php echo $loopbackStatus !== 'ok' && isset($loopbackInfo['message']) ? ': '.esc_html($loopbackInfo['message']) : ''; ?></span>
+                            <span class="description"><?php echo esc_html($lbStatusLabel); ?><?php echo $loopbackStatus !== 'ok' && isset($loopbackInfo['message']) ? ': ' . esc_html($loopbackInfo['message']) : ''; ?></span>
                         </td>
                     </tr>
                 </tbody>
@@ -2065,7 +2065,7 @@ wp queue system              # Show system status</code></pre>';
                         <td>
                             <?php
         $offset = $timeInfo['gmt_offset'] ?? get_option('gmt_offset', 0);
-        echo 'GMT '.($offset >= 0 ? '+' : '').esc_html((string) $offset);
+        echo 'GMT ' . ($offset >= 0 ? '+' : '') . esc_html((string) $offset);
         ?>
                         </td>
                     </tr>

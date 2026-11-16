@@ -38,7 +38,7 @@ class RedisClientFactory
     public static function create(array $config): RedisClientInterface
     {
         // Check for explicit client preference
-        $preferredClient = defined('WP_REDIS_CLIENT') ? strtolower(WP_REDIS_CLIENT) : null;
+        $preferredClient = defined('WP_REDIS_CLIENT') ? mb_strtolower(WP_REDIS_CLIENT) : null;
 
         // If phpredis is preferred and available
         if ($preferredClient === 'phpredis' && extension_loaded('redis')) {
@@ -92,7 +92,7 @@ class RedisClientFactory
         }
 
         // Available via redis-cache plugin
-        if (defined('WP_REDIS_PLUGIN_PATH') && file_exists(WP_REDIS_PLUGIN_PATH.'/dependencies/predis/predis/autoload.php')) {
+        if (defined('WP_REDIS_PLUGIN_PATH') && file_exists(WP_REDIS_PLUGIN_PATH . '/dependencies/predis/predis/autoload.php')) {
             return true;
         }
 

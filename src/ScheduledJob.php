@@ -22,7 +22,7 @@ class ScheduledJob
     protected $condition = null;
 
     /**
-     * @param  class-string  $jobClass
+     * @param class-string $jobClass
      */
     public function __construct(
         protected string $jobClass,
@@ -44,7 +44,7 @@ class ScheduledJob
      */
     public function everyMinutes(int $minutes): static
     {
-        $name = $minutes.'min';
+        $name = $minutes . 'min';
         /* translators: %d: number of minutes */
         $this->scheduler->addInterval($name, $minutes * 60, sprintf(__('Every %d Minutes', 'wp-queue'), $minutes));
 
@@ -153,7 +153,7 @@ class ScheduledJob
     public function at(int $timestamp): static
     {
         // For one-time events, we use a special interval
-        $this->interval = 'once_'.$timestamp;
+        $this->interval = 'once_' . $timestamp;
 
         return $this;
     }

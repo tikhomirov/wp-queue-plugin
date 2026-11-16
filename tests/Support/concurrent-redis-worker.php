@@ -12,9 +12,9 @@ if (PHP_SAPI !== 'cli') {
     exit;
 }
 
-define('ABSPATH', sys_get_temp_dir().'/');
+define('ABSPATH', sys_get_temp_dir() . '/');
 
-require dirname(__DIR__, 2).'/vendor/autoload.php';
+require dirname(__DIR__, 2) . '/vendor/autoload.php';
 
 if (($client = getenv('WP_QUEUE_TEST_REDIS_CLIENT')) !== false && $client !== '') {
     define('WP_REDIS_CLIENT', $client);

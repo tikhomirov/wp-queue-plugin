@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace WPQueue\Tests\Support;
 
 use PDO;
-use PDOException;
 
 /**
  * Minimal real-SQL $wpdb for unit tests (SQLite via PDO).
@@ -27,13 +26,13 @@ final class SqliteWpdb
 
     private bool $suppress = false;
 
-    private PDO $pdo;
+    private \PDO $pdo;
 
     public function __construct(string $path = ':memory:')
     {
-        $this->pdo = new PDO('sqlite:'.$path, null, null, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_TIMEOUT => 30,
+        $this->pdo = new \PDO('sqlite:' . $path, null, null, [
+            \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+            \PDO::ATTR_TIMEOUT => 30,
         ]);
         $this->pdo->exec('PRAGMA busy_timeout = 30000');
 
@@ -88,9 +87,9 @@ final class SqliteWpdb
             $value = $args[$index++] ?? null;
 
             return match ($m[1]) {
-                'd' => (string) (int) $value,
-                'f' => (string) (float) $value,
-                'i' => '"'.str_replace('"', '', (string) $value).'"',
+                'd'     => (string) (int) $value,
+                'f'     => (string) (float) $value,
+                'i'     => '"' . str_replace('"', '', (string) $value) . '"',
                 default => $this->pdo->quote((string) $value),
             };
         }, $query);
@@ -106,7 +105,7 @@ final class SqliteWpdb
             $this->rows_affected = (int) $this->pdo->exec($sql);
 
             return $this->rows_affected;
-        } catch (PDOException $e) {
+        } catch (\PDOException $e) {
             return $this->fail($e);
         }
     }
@@ -122,7 +121,7 @@ final class SqliteWpdb
             $this->insert_id = (int) $this->pdo->lastInsertId();
 
             return $this->rows_affected = $statement->rowCount();
-        } catch (PDOException $e) {
+        } catch (\PDOException $e) {
             return $this->fail($e);
         }
     }
@@ -136,7 +135,7 @@ final class SqliteWpdb
             $statement->execute(array_values($where));
 
             return $this->rows_affected = $statement->rowCount();
-        } catch (PDOException $e) {
+        } catch (\PDOException $e) {
             return $this->fail($e);
         }
     }
@@ -144,8 +143,8 @@ final class SqliteWpdb
     public function get_results(string $query, string $output = 'OBJECT'): array
     {
         try {
-            $rows = $this->pdo->query($query)->fetchAll(PDO::FETCH_ASSOC);
-        } catch (PDOException $e) {
+            $rows = $this->pdo->query($query)->fetchAll(\PDO::FETCH_ASSOC);
+        } catch (\PDOException $e) {
             $this->fail($e);
 
             return [];
@@ -157,8 +156,8 @@ final class SqliteWpdb
     public function get_col(string $query): array
     {
         try {
-            return $this->pdo->query($query)->fetchAll(PDO::FETCH_COLUMN);
-        } catch (PDOException $e) {
+            return $this->pdo->query($query)->fetchAll(\PDO::FETCH_COLUMN);
+        } catch (\PDOException $e) {
             $this->fail($e);
 
             return [];
@@ -171,14 +170,14 @@ final class SqliteWpdb
             $value = $this->pdo->query($query)->fetchColumn();
 
             return $value === false ? null : $value;
-        } catch (PDOException $e) {
+        } catch (\PDOException $e) {
             $this->fail($e);
 
             return null;
         }
     }
 
-    private function fail(PDOException $e): false
+    private function fail(\PDOException $e): false
     {
         $this->last_error = $e->getMessage();
 

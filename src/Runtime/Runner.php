@@ -62,11 +62,11 @@ final class Runner
     public static function normalize(string $value): string
     {
         return match ($value) {
-            'cron_loopback' => self::LOOPBACK,
-            'cron', 'wpcron', 'wp-cron' => self::WP_CRON,
-            'system_cron', 'cli' => self::DAEMON,
+            'cron_loopback'                                                     => self::LOOPBACK,
+            'cron', 'wpcron', 'wp-cron'                                         => self::WP_CRON,
+            'system_cron', 'cli'                                                => self::DAEMON,
             self::DAEMON, self::LOOPBACK, self::WP_CRON, self::SYNC, self::AUTO => $value,
-            default => self::AUTO,
+            default                                                             => self::AUTO,
         };
     }
 
@@ -98,10 +98,10 @@ final class Runner
             // to auto so the queue is still processed by exactly one runner.
             if ($availability['available'] || ! $availability['hard']) {
                 return self::$resolved = [
-                    'runner' => $configured,
+                    'runner'     => $configured,
                     'configured' => $configured,
-                    'auto' => false,
-                    'reason' => $availability['available']
+                    'auto'       => false,
+                    'reason'     => $availability['available']
                         ? __('Selected manually.', 'wp-queue')
                         : sprintf(
                             /* translators: %s: reason */
@@ -117,19 +117,19 @@ final class Runner
 
             if ($availability['available']) {
                 return self::$resolved = [
-                    'runner' => $runner,
+                    'runner'     => $runner,
                     'configured' => $configured,
-                    'auto' => true,
-                    'reason' => $availability['reason'],
+                    'auto'       => true,
+                    'reason'     => $availability['reason'],
                 ];
             }
         }
 
         return self::$resolved = [
-            'runner' => self::SYNC,
+            'runner'     => self::SYNC,
             'configured' => $configured,
-            'auto' => true,
-            'reason' => __('No other runner is available.', 'wp-queue'),
+            'auto'       => true,
+            'reason'     => __('No other runner is available.', 'wp-queue'),
         ];
     }
 
@@ -145,7 +145,7 @@ final class Runner
                 if ($beat !== null && $beat['at'] >= time() - self::HEARTBEAT_TTL) {
                     return [
                         'available' => true,
-                        'hard' => false,
+                        'hard'      => false,
                         /* translators: %s: human time diff */
                         'reason' => sprintf(__('Daemon / system cron is alive: last run %s ago.', 'wp-queue'), self::ago($beat['at'])),
                     ];
@@ -153,8 +153,8 @@ final class Runner
 
                 return [
                     'available' => false,
-                    'hard' => false,
-                    'reason' => $beat === null
+                    'hard'      => false,
+                    'reason'    => $beat === null
                         ? __('No daemon / system cron heartbeat yet.', 'wp-queue')
                         /* translators: %s: human time diff */
                         : sprintf(__('Daemon / system cron heartbeat is stale (%s ago).', 'wp-queue'), self::ago($beat['at'])),
@@ -172,7 +172,7 @@ final class Runner
                 if (is_array($check) && ($check['status'] ?? '') === 'error') {
                     return [
                         'available' => false,
-                        'hard' => false,
+                        'hard'      => false,
                         /* translators: %s: error message */
                         'reason' => sprintf(__('Loopback request failed: %s', 'wp-queue'), (string) ($check['message'] ?? '')),
                     ];
@@ -219,9 +219,9 @@ final class Runner
         }
 
         return [
-            'at' => (int) $beat['at'],
+            'at'        => (int) $beat['at'],
             'processed' => (int) ($beat['processed'] ?? 0),
-            'skipped' => (bool) ($beat['skipped'] ?? false),
+            'skipped'   => (bool) ($beat['skipped'] ?? false),
         ];
     }
 
@@ -239,24 +239,24 @@ final class Runner
     public static function label(string $runner): string
     {
         return match ($runner) {
-            self::AUTO => __('Auto', 'wp-queue'),
-            self::DAEMON => __('Daemon / system cron', 'wp-queue'),
+            self::AUTO     => __('Auto', 'wp-queue'),
+            self::DAEMON   => __('Daemon / system cron', 'wp-queue'),
             self::LOOPBACK => __('Loopback (admin-ajax)', 'wp-queue'),
-            self::WP_CRON => __('WP-Cron', 'wp-queue'),
-            self::SYNC => __('Synchronous (in request)', 'wp-queue'),
-            default => $runner,
+            self::WP_CRON  => __('WP-Cron', 'wp-queue'),
+            self::SYNC     => __('Synchronous (in request)', 'wp-queue'),
+            default        => $runner,
         };
     }
 
     public static function hint(string $runner): string
     {
         return match ($runner) {
-            self::AUTO => __('Uses the fastest available runner: daemon / system cron if its heartbeat is fresh, then loopback, WP-Cron, synchronous.', 'wp-queue'),
-            self::DAEMON => __('Fastest and most reliable. A system cron runs `wp queue work` every minute (or a daemon runs continuously). WP-Cron and loopback are not used.', 'wp-queue'),
+            self::AUTO     => __('Uses the fastest available runner: daemon / system cron if its heartbeat is fresh, then loopback, WP-Cron, synchronous.', 'wp-queue'),
+            self::DAEMON   => __('Fastest and most reliable. A system cron runs `wp queue work` every minute (or a daemon runs continuously). WP-Cron and loopback are not used.', 'wp-queue'),
             self::LOOPBACK => __('After a job is dispatched, a non-blocking request to admin-ajax.php starts a worker, like Action Scheduler. Good for shared hosting. Delayed jobs run on the next dispatch.', 'wp-queue'),
-            self::WP_CRON => __('WP-Cron checks the queue every minute; needs site traffic or a system cron calling wp-cron.php.', 'wp-queue'),
-            self::SYNC => __('Jobs run at the end of the request that dispatched them. No background processing; slows that request down.', 'wp-queue'),
-            default => '',
+            self::WP_CRON  => __('WP-Cron checks the queue every minute; needs site traffic or a system cron calling wp-cron.php.', 'wp-queue'),
+            self::SYNC     => __('Jobs run at the end of the request that dispatched them. No background processing; slows that request down.', 'wp-queue'),
+            default        => '',
         };
     }
 

@@ -6,14 +6,14 @@ use WPQueue\Admin\CronMonitor;
 
 beforeEach(function (): void {
     Brain\Monkey\Functions\stubs([
-        '__' => fn ($text) => $text,
-        'esc_html__' => fn ($text) => $text,
-        'wp_next_scheduled' => fn () => time() + 3600,
-        'wp_unschedule_event' => fn () => true,
+        '__'                       => fn ($text) => $text,
+        'esc_html__'               => fn ($text) => $text,
+        'wp_next_scheduled'        => fn () => time() + 3600,
+        'wp_unschedule_event'      => fn () => true,
         'wp_schedule_single_event' => fn () => true,
-        'do_action' => fn () => null,
-        'current_time' => fn () => time(),
-        'human_time_diff' => fn ($from, $to) => '1 hour',
+        'do_action'                => fn () => null,
+        'current_time'             => fn () => time(),
+        'human_time_diff'          => fn ($from, $to) => '1 hour',
     ]);
 });
 
@@ -24,7 +24,7 @@ describe('CronMonitor', function (): void {
                 'wp_scheduled_delete' => [
                     md5('') => [
                         'schedule' => 'daily',
-                        'args' => [],
+                        'args'     => [],
                         'interval' => DAY_IN_SECONDS,
                     ],
                 ],
@@ -33,7 +33,7 @@ describe('CronMonitor', function (): void {
                 'wp_update_plugins' => [
                     md5('') => [
                         'schedule' => 'twicedaily',
-                        'args' => [],
+                        'args'     => [],
                         'interval' => 12 * HOUR_IN_SECONDS,
                     ],
                 ],
@@ -82,7 +82,7 @@ describe('CronMonitor', function (): void {
                 'my_custom_hook' => [
                     md5(serialize(['arg1'])) => [
                         'schedule' => 'hourly',
-                        'args' => ['arg1'],
+                        'args'     => ['arg1'],
                         'interval' => HOUR_IN_SECONDS,
                     ],
                 ],
@@ -146,7 +146,7 @@ describe('CronMonitor', function (): void {
             ->once()
             ->andReturn([
                 'hourly' => ['interval' => 3600, 'display' => 'Once Hourly'],
-                'daily' => ['interval' => 86400, 'display' => 'Once Daily'],
+                'daily'  => ['interval' => 86400, 'display' => 'Once Daily'],
             ]);
 
         $monitor = new CronMonitor();
@@ -179,7 +179,7 @@ describe('CronMonitor', function (): void {
             time() + 3600 => [
                 'my_plugin_task1' => [md5('') => ['schedule' => 'hourly', 'args' => [], 'interval' => 3600]],
                 'my_plugin_task2' => [md5('') => ['schedule' => 'daily', 'args' => [], 'interval' => 86400]],
-                'other_hook' => [md5('') => ['schedule' => 'hourly', 'args' => [], 'interval' => 3600]],
+                'other_hook'      => [md5('') => ['schedule' => 'hourly', 'args' => [], 'interval' => 3600]],
             ],
         ];
 

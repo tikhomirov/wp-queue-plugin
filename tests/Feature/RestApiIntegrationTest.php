@@ -35,7 +35,7 @@ beforeEach(function (): void {
 
     // Мок для REST API
     global $wp_rest_server;
-    $wp_rest_server = new \WP_REST_Server();
+    $wp_rest_server = new WP_REST_Server();
     do_action('rest_api_init');
 });
 
@@ -52,7 +52,7 @@ test('REST API endpoint /queues возвращает список очереде
     WPQueue::dispatch(new SimpleTestJob());
     WPQueue::dispatch(new EmailQueueJob());
 
-    $request = new \WP_REST_Request('GET', '/wp-queue/v1/queues');
+    $request = new WP_REST_Request('GET', '/wp-queue/v1/queues');
     $response = rest_do_request($request);
 
     expect($response->get_status())->toBe(200);
@@ -68,7 +68,7 @@ test('REST API endpoint /queues возвращает список очереде
 test('REST API endpoint /queues/{queue} возвращает информацию о конкретной очереди', function (): void {
     WPQueue::dispatch(new SimpleTestJob());
 
-    $request = new \WP_REST_Request('GET', '/wp-queue/v1/queues/default');
+    $request = new WP_REST_Request('GET', '/wp-queue/v1/queues/default');
     $response = rest_do_request($request);
 
     expect($response->get_status())->toBe(200);
@@ -81,7 +81,7 @@ test('REST API endpoint /queues/{queue} возвращает информаци�
 });
 
 test('REST API endpoint /queues/{queue}/pause ставит очередь на паузу', function (): void {
-    $request = new \WP_REST_Request('POST', '/wp-queue/v1/queues/default/pause');
+    $request = new WP_REST_Request('POST', '/wp-queue/v1/queues/default/pause');
     $response = rest_do_request($request);
 
     expect($response->get_status())->toBe(200);
@@ -96,7 +96,7 @@ test('REST API endpoint /queues/{queue}/resume возобновляет очер
     WPQueue::pause('default');
     expect(WPQueue::isPaused('default'))->toBeTrue();
 
-    $request = new \WP_REST_Request('POST', '/wp-queue/v1/queues/default/resume');
+    $request = new WP_REST_Request('POST', '/wp-queue/v1/queues/default/resume');
     $response = rest_do_request($request);
 
     expect($response->get_status())->toBe(200);
@@ -112,7 +112,7 @@ test('REST API endpoint /queues/{queue}/clear очищает очередь', fu
     WPQueue::dispatch(new SimpleTestJob());
     expect(WPQueue::queueSize('default'))->toBe(2);
 
-    $request = new \WP_REST_Request('POST', '/wp-queue/v1/queues/default/clear');
+    $request = new WP_REST_Request('POST', '/wp-queue/v1/queues/default/clear');
     $response = rest_do_request($request);
 
     expect($response->get_status())->toBe(200);
@@ -127,7 +127,7 @@ test('REST API endpoint /queues/{queue}/jobs возвращает список �
     WPQueue::dispatch(new SimpleTestJob());
     WPQueue::dispatch(new SimpleTestJob());
 
-    $request = new \WP_REST_Request('GET', '/wp-queue/v1/queues/default/jobs');
+    $request = new WP_REST_Request('GET', '/wp-queue/v1/queues/default/jobs');
     $response = rest_do_request($request);
 
     expect($response->get_status())->toBe(200);
@@ -146,7 +146,7 @@ test('REST API endpoint /logs возвращает последние логи',
     $worker = WPQueue::worker();
     $worker->runNextJob('default');
 
-    $request = new \WP_REST_Request('GET', '/wp-queue/v1/logs');
+    $request = new WP_REST_Request('GET', '/wp-queue/v1/logs');
     $response = rest_do_request($request);
 
     expect($response->get_status())->toBe(200);
@@ -172,7 +172,7 @@ test('REST API endpoint /logs с параметром limit ограничива
         $processed++;
     }
 
-    $request = new \WP_REST_Request('GET', '/wp-queue/v1/logs');
+    $request = new WP_REST_Request('GET', '/wp-queue/v1/logs');
     $request->set_param('limit', 3);
     $response = rest_do_request($request);
 
@@ -190,7 +190,7 @@ test('REST API endpoint /logs с параметром status фильтрует 
     $worker->runNextJob('default');
     $worker->runNextJob('default');
 
-    $request = new \WP_REST_Request('GET', '/wp-queue/v1/logs');
+    $request = new WP_REST_Request('GET', '/wp-queue/v1/logs');
     $request->set_param('status', 'failed');
     $response = rest_do_request($request);
 
@@ -215,7 +215,7 @@ test('REST API endpoint /stats возвращает статистику оче�
     $worker->setMaxJobs(1);
     $worker->runNextJob('default');
 
-    $request = new \WP_REST_Request('GET', '/wp-queue/v1/stats');
+    $request = new WP_REST_Request('GET', '/wp-queue/v1/stats');
     $response = rest_do_request($request);
 
     expect($response->get_status())->toBe(200);
@@ -233,7 +233,7 @@ test('REST API требует аутентификацию для защищен
     // Мок неавторизованного пользователя
     wp_set_current_user(0);
 
-    $request = new \WP_REST_Request('POST', '/wp-queue/v1/queues/default/clear');
+    $request = new WP_REST_Request('POST', '/wp-queue/v1/queues/default/clear');
     $response = rest_do_request($request);
 
     expect($response->get_status())->toBe(401);
@@ -244,7 +244,7 @@ test('REST API проверяет права доступа для админи�
     $user_id = wp_create_user('testuser', 'password', 'test@example.com');
     wp_set_current_user($user_id);
 
-    $request = new \WP_REST_Request('POST', '/wp-queue/v1/queues/default/clear');
+    $request = new WP_REST_Request('POST', '/wp-queue/v1/queues/default/clear');
     $response = rest_do_request($request);
 
     expect($response->get_status())->toBe(403);
@@ -254,7 +254,7 @@ test('REST API возвращает 404 для несуществующей оч
     // Авторизуемся как администратор для доступа к API
     wp_set_current_user(1);
 
-    $request = new \WP_REST_Request('GET', '/wp-queue/v1/queues/nonexistent');
+    $request = new WP_REST_Request('GET', '/wp-queue/v1/queues/nonexistent');
     $response = rest_do_request($request);
 
     expect($response->get_status())->toBe(404);
@@ -265,7 +265,7 @@ test('REST API endpoint /queues/{queue}/process запускает обрабо�
 
     WPQueue::dispatch(new CounterJob('wp_queue_test_counter'));
 
-    $request = new \WP_REST_Request('POST', '/wp-queue/v1/queues/default/process');
+    $request = new WP_REST_Request('POST', '/wp-queue/v1/queues/default/process');
     $response = rest_do_request($request);
 
     expect($response->get_status())->toBe(200);

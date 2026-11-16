@@ -25,9 +25,9 @@ function redisTestConfig(): ?array
     }
 
     return [
-        'host' => $host,
-        'port' => (int) (getenv('WP_QUEUE_TEST_REDIS_PORT') ?: 6379),
-        'prefix' => 'wpqtest:'.bin2hex(random_bytes(4)).':',
+        'host'   => $host,
+        'port'   => (int) (getenv('WP_QUEUE_TEST_REDIS_PORT') ?: 6379),
+        'prefix' => 'wpqtest:' . bin2hex(random_bytes(4)) . ':',
     ];
 }
 
@@ -44,7 +44,7 @@ function redisTestQueue(array $config): RedisQueue
             $this->connection()->del(['queues', 'index']);
         }
 
-        public function client(): \WPQueue\Queue\Redis\RedisClientInterface
+        public function client(): WPQueue\Queue\Redis\RedisClientInterface
         {
             return $this->connection();
         }
@@ -138,7 +138,7 @@ describe('RedisQueue', function (): void {
             $ids[] = $job->getId();
         }
 
-        $script = dirname(__DIR__).'/Support/concurrent-redis-worker.php';
+        $script = dirname(__DIR__) . '/Support/concurrent-redis-worker.php';
         $processes = [];
         $pipes = [];
         for ($w = 0; $w < 4; $w++) {

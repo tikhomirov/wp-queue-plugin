@@ -101,7 +101,7 @@ final class Trigger
             try {
                 spawn_cron();
             } catch (\Throwable $e) {
-                error_log('WP Queue: spawn_cron failed: '.$e->getMessage());
+                error_log('WP Queue: spawn_cron failed: ' . $e->getMessage());
             }
         });
     }

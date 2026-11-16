@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace WPQueue;
 
-use InvalidArgumentException;
 use WPQueue\Contracts\InspectableQueue;
 use WPQueue\Contracts\QueueInterface;
 use WPQueue\Queue\DatabaseQueue;
@@ -156,7 +155,7 @@ class QueueManager
 
         if (isset($wpdb) && method_exists($wpdb, 'get_col')) {
             try {
-                $table = $wpdb->prefix.'queue_logs';
+                $table = $wpdb->prefix . 'queue_logs';
                 $suppress = method_exists($wpdb, 'suppress_errors') ? $wpdb->suppress_errors(true) : false;
                 $logged = (array) $wpdb->get_col("SELECT DISTINCT queue FROM {$table}");
 
@@ -217,28 +216,28 @@ class QueueManager
 
         $status = match ($driver) {
             'database', 'sync' => [
-                'status' => self::STATUS_READY,
+                'status'    => self::STATUS_READY,
                 'extension' => true,
-                'server' => true,
-                'message' => $driver === 'database'
+                'server'    => true,
+                'message'   => $driver === 'database'
                     /* translators: %s: database table name */
-                    ? sprintf(__('Jobs are stored in the %s table', 'wp-queue'), ($GLOBALS['wpdb']->prefix ?? 'wp_').'queue_jobs')
+                    ? sprintf(__('Jobs are stored in the %s table', 'wp-queue'), ($GLOBALS['wpdb']->prefix ?? 'wp_') . 'queue_jobs')
                     : __('Synchronous execution (no queue)', 'wp-queue'),
             ],
-            'redis' => $this->getRedisStatus(),
+            'redis'     => $this->getRedisStatus(),
             'memcached' => $this->getMemcachedStatus(),
-            default => isset($this->customCreators[$driver])
+            default     => isset($this->customCreators[$driver])
                 ? [
-                    'status' => self::STATUS_READY,
+                    'status'    => self::STATUS_READY,
                     'extension' => true,
-                    'server' => true,
-                    'message' => __('Custom driver', 'wp-queue'),
+                    'server'    => true,
+                    'message'   => __('Custom driver', 'wp-queue'),
                 ]
                 : [
-                    'status' => self::STATUS_UNAVAILABLE,
+                    'status'    => self::STATUS_UNAVAILABLE,
                     'extension' => false,
-                    'server' => false,
-                    'message' => __('Unknown driver', 'wp-queue'),
+                    'server'    => false,
+                    'message'   => __('Unknown driver', 'wp-queue'),
                 ],
         };
 
@@ -265,10 +264,10 @@ class QueueManager
         // Check if Redis is disabled
         if (defined('WP_REDIS_DISABLED') && WP_REDIS_DISABLED) {
             return [
-                'status' => self::STATUS_UNAVAILABLE,
+                'status'    => self::STATUS_UNAVAILABLE,
                 'extension' => false,
-                'server' => false,
-                'message' => __('Redis is disabled via WP_REDIS_DISABLED', 'wp-queue'),
+                'server'    => false,
+                'message'   => __('Redis is disabled via WP_REDIS_DISABLED', 'wp-queue'),
             ];
         }
 
@@ -289,10 +288,10 @@ class QueueManager
 
         // No Redis client available
         return [
-            'status' => self::STATUS_NO_EXTENSION,
+            'status'    => self::STATUS_NO_EXTENSION,
             'extension' => false,
-            'server' => false,
-            'message' => __('PHP extension "redis" (phpredis) is not installed', 'wp-queue'),
+            'server'    => false,
+            'message'   => __('PHP extension "redis" (phpredis) is not installed', 'wp-queue'),
         ];
     }
 
@@ -311,17 +310,17 @@ class QueueManager
             $redis->ping();
 
             return [
-                'status' => self::STATUS_READY,
+                'status'    => self::STATUS_READY,
                 'extension' => true,
-                'server' => true,
+                'server'    => true,
                 // translators: 1: Redis host, 2: Redis port.
                 'message' => sprintf(__('Connected to Redis at %1$s:%2$d (phpredis)', 'wp-queue'), $host, $port),
             ];
         } catch (\Throwable $e) {
             return [
-                'status' => self::STATUS_NO_SERVER,
+                'status'    => self::STATUS_NO_SERVER,
                 'extension' => true,
-                'server' => false,
+                'server'    => false,
                 // translators: 1: Redis host, 2: Redis port, 3: Error message.
                 'message' => sprintf(
                     __('Cannot connect to Redis at %1$s:%2$d - %3$s', 'wp-queue'),
@@ -373,9 +372,9 @@ class QueueManager
 
                 if ($result === true) {
                     return [
-                        'status' => self::STATUS_READY,
+                        'status'    => self::STATUS_READY,
                         'extension' => true,
-                        'server' => true,
+                        'server'    => true,
                         // translators: 1: Redis host, 2: Redis port.
                         'message' => sprintf(__('Connected to Redis at %1$s:%2$d (via redis-cache plugin)', 'wp-queue'), $host, $port),
                     ];
@@ -383,26 +382,26 @@ class QueueManager
 
                 // Connection failed with error message
                 return [
-                    'status' => self::STATUS_NO_SERVER,
+                    'status'    => self::STATUS_NO_SERVER,
                     'extension' => true,
-                    'server' => false,
-                    'message' => is_string($result) ? $result : __('Redis connection failed', 'wp-queue'),
+                    'server'    => false,
+                    'message'   => is_string($result) ? $result : __('Redis connection failed', 'wp-queue'),
                 ];
             }
 
             // Fallback: plugin exists but no check method
             return [
-                'status' => self::STATUS_READY,
+                'status'    => self::STATUS_READY,
                 'extension' => true,
-                'server' => true,
+                'server'    => true,
                 // translators: 1: Redis host, 2: Redis port.
                 'message' => sprintf(__('Connected to Redis at %1$s:%2$d (via redis-cache plugin)', 'wp-queue'), $host, $port),
             ];
         } catch (\Throwable $e) {
             return [
-                'status' => self::STATUS_NO_SERVER,
+                'status'    => self::STATUS_NO_SERVER,
                 'extension' => true,
-                'server' => false,
+                'server'    => false,
                 // translators: 1: Redis host, 2: Redis port, 3: Error message.
                 'message' => sprintf(
                     __('Cannot connect to Redis at %1$s:%2$d - %3$s', 'wp-queue'),
@@ -420,7 +419,7 @@ class QueueManager
     protected function isPredisAvailable(): bool
     {
         // Check if Predis is loaded via redis-cache plugin
-        if (defined('WP_REDIS_PLUGIN_PATH') && file_exists(WP_REDIS_PLUGIN_PATH.'/dependencies/predis/predis/autoload.php')) {
+        if (defined('WP_REDIS_PLUGIN_PATH') && file_exists(WP_REDIS_PLUGIN_PATH . '/dependencies/predis/predis/autoload.php')) {
             return true;
         }
 
@@ -437,25 +436,25 @@ class QueueManager
     {
         try {
             // Load Predis from redis-cache plugin if available
-            if (defined('WP_REDIS_PLUGIN_PATH') && file_exists(WP_REDIS_PLUGIN_PATH.'/dependencies/predis/predis/autoload.php')) {
-                require_once WP_REDIS_PLUGIN_PATH.'/dependencies/predis/predis/autoload.php';
+            if (defined('WP_REDIS_PLUGIN_PATH') && file_exists(WP_REDIS_PLUGIN_PATH . '/dependencies/predis/predis/autoload.php')) {
+                require_once WP_REDIS_PLUGIN_PATH . '/dependencies/predis/predis/autoload.php';
             }
 
             if (! class_exists('\Predis\Client')) {
                 return [
-                    'status' => self::STATUS_NO_EXTENSION,
+                    'status'    => self::STATUS_NO_EXTENSION,
                     'extension' => false,
-                    'server' => false,
-                    'message' => __('Predis library is not available', 'wp-queue'),
+                    'server'    => false,
+                    'message'   => __('Predis library is not available', 'wp-queue'),
                 ];
             }
 
             $parameters = [
-                'scheme' => defined('WP_REDIS_SCHEME') ? WP_REDIS_SCHEME : 'tcp',
-                'host' => $host,
-                'port' => $port,
-                'database' => defined('WP_REDIS_DATABASE') ? (int) WP_REDIS_DATABASE : 0,
-                'timeout' => 1,
+                'scheme'             => defined('WP_REDIS_SCHEME') ? WP_REDIS_SCHEME : 'tcp',
+                'host'               => $host,
+                'port'               => $port,
+                'database'           => defined('WP_REDIS_DATABASE') ? (int) WP_REDIS_DATABASE : 0,
+                'timeout'            => 1,
                 'read_write_timeout' => 1,
             ];
 
@@ -467,17 +466,17 @@ class QueueManager
             $client->ping();
 
             return [
-                'status' => self::STATUS_READY,
+                'status'    => self::STATUS_READY,
                 'extension' => true,
-                'server' => true,
+                'server'    => true,
                 // translators: 1: Redis host, 2: Redis port.
                 'message' => sprintf(__('Connected to Redis at %1$s:%2$d (Predis)', 'wp-queue'), $host, $port),
             ];
         } catch (\Throwable $e) {
             return [
-                'status' => self::STATUS_NO_SERVER,
+                'status'    => self::STATUS_NO_SERVER,
                 'extension' => true,
-                'server' => false,
+                'server'    => false,
                 // translators: 1: Redis host, 2: Redis port, 3: Error message.
                 'message' => sprintf(
                     __('Cannot connect to Redis at %1$s:%2$d - %3$s', 'wp-queue'),
@@ -499,10 +498,10 @@ class QueueManager
         // Step 1: Check PHP extension
         if (! extension_loaded('memcached')) {
             return [
-                'status' => self::STATUS_NO_EXTENSION,
+                'status'    => self::STATUS_NO_EXTENSION,
                 'extension' => false,
-                'server' => false,
-                'message' => __('PHP extension "memcached" is not installed', 'wp-queue'),
+                'server'    => false,
+                'message'   => __('PHP extension "memcached" is not installed', 'wp-queue'),
             ];
         }
 
@@ -518,9 +517,9 @@ class QueueManager
             $port = defined('WP_MEMCACHED_PORT') ? WP_MEMCACHED_PORT : 11211;
 
             return [
-                'status' => self::STATUS_READY,
+                'status'    => self::STATUS_READY,
                 'extension' => true,
-                'server' => true,
+                'server'    => true,
                 // translators: 1: Memcached host, 2: Memcached port.
                 'message' => sprintf(__('Connected to Memcached at %1$s:%2$d', 'wp-queue'), $host, $port),
             ];
@@ -529,9 +528,9 @@ class QueueManager
             $port = defined('WP_MEMCACHED_PORT') ? WP_MEMCACHED_PORT : 11211;
 
             return [
-                'status' => self::STATUS_NO_SERVER,
+                'status'    => self::STATUS_NO_SERVER,
                 'extension' => true,
-                'server' => false,
+                'server'    => false,
                 // translators: 1: Memcached host, 2: Memcached port, 3: Error message.
                 'message' => sprintf(
                     __('Cannot connect to Memcached at %1$s:%2$d - %3$s', 'wp-queue'),
@@ -564,12 +563,12 @@ class QueueManager
         // Add custom drivers
         foreach (array_keys($this->customCreators) as $name) {
             $drivers[$name] = [
-                'status' => self::STATUS_READY,
+                'status'    => self::STATUS_READY,
                 'extension' => true,
-                'server' => true,
-                'message' => __('Custom driver', 'wp-queue'),
+                'server'    => true,
+                'message'   => __('Custom driver', 'wp-queue'),
                 'available' => true,
-                'info' => __('Custom driver', 'wp-queue'),
+                'info'      => __('Custom driver', 'wp-queue'),
             ];
         }
 
@@ -587,7 +586,7 @@ class QueueManager
     }
 
     /**
-     * @param  callable(QueueManager): QueueInterface  $callback
+     * @param callable(QueueManager): QueueInterface $callback
      */
     public function extend(string $driver, callable $callback): void
     {
@@ -707,12 +706,12 @@ class QueueManager
         }
 
         return match ($name) {
-            'database' => new DatabaseQueue(),
-            'sync' => new SyncQueue(),
-            'redis' => new RedisQueue(),
+            'database'  => new DatabaseQueue(),
+            'sync'      => new SyncQueue(),
+            'redis'     => new RedisQueue(),
             'memcached' => new MemcachedQueue(),
-            'auto' => $this->resolve($this->detectBestDriver()),
-            default => throw new InvalidArgumentException(
+            'auto'      => $this->resolve($this->detectBestDriver()),
+            default     => throw new \InvalidArgumentException(
                 // translators: %s: Queue driver name.
                 esc_html(sprintf(__('Queue driver "%s" is not supported.', 'wp-queue'), $name)),
             ),

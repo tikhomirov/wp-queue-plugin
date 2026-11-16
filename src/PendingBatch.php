@@ -16,7 +16,7 @@ class PendingBatch
     protected string $queue = 'default';
 
     /**
-     * @param  JobInterface[]  $jobs
+     * @param JobInterface[] $jobs
      */
     public function __construct(
         protected array $jobs,

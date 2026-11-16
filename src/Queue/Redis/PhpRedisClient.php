@@ -61,7 +61,7 @@ class PhpRedisClient implements RedisClientInterface
 
                 // TLS support
                 if ($this->config['scheme'] === 'tls' || $this->config['scheme'] === 'rediss') {
-                    $host = 'tls://'.$host;
+                    $host = 'tls://' . $host;
                 }
 
                 $this->connected = $this->redis->connect(
@@ -98,7 +98,7 @@ class PhpRedisClient implements RedisClientInterface
             $this->redis->setOption(\Redis::OPT_PREFIX, $this->config['prefix']);
         } catch (\RedisException $e) {
             $this->connected = false;
-            throw new \RuntimeException(esc_html('Redis connection failed: '.$e->getMessage()), 0, $e);
+            throw new \RuntimeException(esc_html('Redis connection failed: ' . $e->getMessage()), 0, $e);
         }
     }
 
@@ -253,7 +253,7 @@ class PhpRedisClient implements RedisClientInterface
 
         if ($result === false && ($error = $this->redis->getLastError()) !== null) {
             $this->redis->clearLastError();
-            throw new \RuntimeException('Redis script failed: '.$error);
+            throw new \RuntimeException('Redis script failed: ' . $error);
         }
 
         return $result;

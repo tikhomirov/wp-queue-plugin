@@ -53,8 +53,8 @@ final class Lock
         // First use of this lock name: the primary key makes concurrent inserts fail for all but one.
         $suppress = $wpdb->suppress_errors(true);
         $inserted = $wpdb->insert($table, [
-            'name' => $name,
-            'owner' => $token,
+            'name'       => $name,
+            'owner'      => $token,
             'expires_at' => $now + $ttl,
         ], ['%s', '%s', '%d']);
         $wpdb->suppress_errors($suppress);

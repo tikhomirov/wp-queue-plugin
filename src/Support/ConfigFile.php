@@ -64,13 +64,13 @@ final class ConfigFile
             return null;
         }
 
-        if (file_exists(ABSPATH.'wp-config.php')) {
-            return ABSPATH.'wp-config.php';
+        if (file_exists(ABSPATH . 'wp-config.php')) {
+            return ABSPATH . 'wp-config.php';
         }
 
-        $parent = dirname(ABSPATH).'/wp-config.php';
+        $parent = dirname(ABSPATH) . '/wp-config.php';
 
-        if (file_exists($parent) && ! file_exists(dirname(ABSPATH).'/wp-settings.php')) {
+        if (file_exists($parent) && ! file_exists(dirname(ABSPATH) . '/wp-settings.php')) {
             return $parent;
         }
 
@@ -116,7 +116,7 @@ final class ConfigFile
 
         foreach ($matches as $match) {
             $values[$match[1]] = isset($match[3]) && $match[3] !== ''
-                ? strtolower($match[3]) === 'true'
+                ? mb_strtolower($match[3]) === 'true'
                 : $match[2];
         }
 
@@ -134,7 +134,7 @@ final class ConfigFile
     }
 
     /**
-     * @param  array<string, string|bool>  $defines
+     * @param array<string, string|bool> $defines
      */
     public static function block(array $defines): string
     {
@@ -145,30 +145,30 @@ final class ConfigFile
                 continue;
             }
 
-            $export = is_bool($value) ? ($value ? 'true' : 'false') : "'".str_replace(['\\', "'"], ['\\\\', "\\'"], (string) $value)."'";
+            $export = is_bool($value) ? ($value ? 'true' : 'false') : "'" . str_replace(['\\', "'"], ['\\\\', "\\'"], (string) $value) . "'";
             $lines[] = sprintf("define('%s', %s);", $name, $export);
         }
 
         $lines[] = self::END;
 
-        return implode("\n", $lines)."\n";
+        return implode("\n", $lines) . "\n";
     }
 
     /**
      * Content with the managed block replaced/inserted (or removed if empty).
      *
-     * @param  array<string, string|bool>  $defines
+     * @param array<string, string|bool> $defines
      */
     public static function render(string $content, array $defines): ?string
     {
-        $pattern = '/^[ \t]*'.preg_quote(self::BEGIN, '/').'.*?^[ \t]*'.preg_quote(self::END, '/')."[^\n]*\n?(\n)?/ms";
+        $pattern = '/^[ \t]*' . preg_quote(self::BEGIN, '/') . '.*?^[ \t]*' . preg_quote(self::END, '/') . "[^\n]*\n?(\n)?/ms";
         $block = $defines === [] ? '' : self::block($defines);
 
         if (preg_match($pattern, $content)) {
             // The blank line written after the block goes away with it.
             return (string) preg_replace_callback(
                 $pattern,
-                static fn (array $m): string => $block === '' ? '' : $block.($m[1] ?? ''),
+                static fn (array $m): string => $block === '' ? '' : $block . ($m[1] ?? ''),
                 $content,
                 1,
             );
@@ -188,7 +188,7 @@ final class ConfigFile
             if (preg_match($anchor, $content, $match, PREG_OFFSET_CAPTURE)) {
                 $offset = (int) $match[0][1];
 
-                return substr($content, 0, $offset).$block."\n".substr($content, $offset);
+                return mb_substr($content, 0, $offset) . $block . "\n" . mb_substr($content, $offset);
             }
         }
 
@@ -196,7 +196,7 @@ final class ConfigFile
     }
 
     /**
-     * @param  array<string, string|bool>  $defines
+     * @param  array<string, string|bool>                         $defines
      * @return array{ok: bool, message: string, snippet?: string}
      */
     public static function write(array $defines): array
@@ -238,8 +238,8 @@ final class ConfigFile
         $suffix = bin2hex(random_bytes(4));
         // ".php" suffix: if the web server exposes the directory, the file is
         // executed rather than served as text, so secrets do not leak.
-        $backup = $dir.'/.wp-config.wp-queue-backup-'.$suffix.'.php';
-        $tmp = $dir.'/.wp-config.wp-queue-tmp-'.$suffix.'.php';
+        $backup = $dir . '/.wp-config.wp-queue-backup-' . $suffix . '.php';
+        $tmp = $dir . '/.wp-config.wp-queue-tmp-' . $suffix . '.php';
 
         if (! @copy($path, $backup)) {
             return $fail(__('Could not create a backup of wp-config.php; nothing was changed.', 'wp-queue'));
@@ -247,7 +247,7 @@ final class ConfigFile
 
         @chmod($backup, $perms & 0770);
 
-        if (@file_put_contents($tmp, $new, LOCK_EX) !== strlen($new)) {
+        if (@file_put_contents($tmp, $new, LOCK_EX) !== mb_strlen($new)) {
             @unlink($tmp);
             @unlink($backup);
 
@@ -324,7 +324,7 @@ final class ConfigFile
     /**
      * Ask a fresh WordPress request which managed constants it sees.
      *
-     * @param  array<string, string|bool>  $defines
+     * @param array<string, string|bool> $defines
      */
     private static function verify(array $defines): true|string
     {
@@ -336,9 +336,9 @@ final class ConfigFile
         set_transient(self::PROBE_TRANSIENT, $token, 120);
 
         $response = wp_remote_post(admin_url('admin-ajax.php'), [
-            'timeout' => 15,
+            'timeout'   => 15,
             'sslverify' => apply_filters('https_local_ssl_verify', false),
-            'body' => ['action' => self::PROBE_ACTION, 'token' => $token],
+            'body'      => ['action' => self::PROBE_ACTION, 'token' => $token],
         ]);
 
         delete_transient(self::PROBE_TRANSIENT);
@@ -412,14 +412,14 @@ final class ConfigFile
 
     private static function extractBlock(string $content): ?string
     {
-        $begin = strpos($content, self::BEGIN);
+        $begin = mb_strpos($content, self::BEGIN);
 
         if ($begin === false) {
             return null;
         }
 
-        $end = strpos($content, self::END, $begin);
+        $end = mb_strpos($content, self::END, $begin);
 
-        return $end === false ? null : substr($content, $begin, $end - $begin);
+        return $end === false ? null : mb_substr($content, $begin, $end - $begin);
     }
 }

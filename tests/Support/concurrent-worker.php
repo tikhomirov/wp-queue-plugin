@@ -12,10 +12,10 @@ if (PHP_SAPI !== 'cli') {
     exit;
 }
 
-define('ABSPATH', sys_get_temp_dir().'/');
+define('ABSPATH', sys_get_temp_dir() . '/');
 define('ARRAY_A', 'ARRAY_A');
 
-require dirname(__DIR__, 2).'/vendor/autoload.php';
+require dirname(__DIR__, 2) . '/vendor/autoload.php';
 
 $GLOBALS['wpdb'] = new WPQueue\Tests\Support\SqliteWpdb($argv[1]);
 

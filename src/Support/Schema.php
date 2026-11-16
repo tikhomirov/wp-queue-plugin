@@ -26,14 +26,14 @@ final class Schema
     {
         global $wpdb;
 
-        return $wpdb->prefix.'queue_jobs';
+        return $wpdb->prefix . 'queue_jobs';
     }
 
     public static function locksTable(): string
     {
         global $wpdb;
 
-        return $wpdb->prefix.'queue_locks';
+        return $wpdb->prefix . 'queue_locks';
     }
 
     /**
@@ -118,7 +118,7 @@ final class Schema
         );
 
         foreach ((array) $options as $optionName) {
-            $queue = substr((string) $optionName, strlen('wp_queue_jobs_'));
+            $queue = mb_substr((string) $optionName, mb_strlen('wp_queue_jobs_'));
             $jobs = get_option($optionName, []);
 
             if (is_array($jobs)) {
@@ -128,12 +128,12 @@ final class Schema
                     }
 
                     $wpdb->insert(self::jobsTable(), [
-                        'job_id' => (string) $jobId,
-                        'queue' => $queue,
-                        'payload' => base64_encode((string) $data['payload']),
-                        'attempts' => (int) ($data['attempts'] ?? 0),
+                        'job_id'       => (string) $jobId,
+                        'queue'        => $queue,
+                        'payload'      => base64_encode((string) $data['payload']),
+                        'attempts'     => (int) ($data['attempts'] ?? 0),
                         'available_at' => (int) ($data['available_at'] ?? time()),
-                        'created_at' => time(),
+                        'created_at'   => time(),
                     ], ['%s', '%s', '%s', '%d', '%d', '%d']);
                 }
             }

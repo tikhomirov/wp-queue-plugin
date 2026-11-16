@@ -61,7 +61,7 @@ describe('QueueManager', function (): void {
 describe('DatabaseQueue', function (): void {
     it('can push job to queue', function (): void {
         Brain\Monkey\Functions\stubs([
-            'get_site_option' => fn () => [],
+            'get_site_option'    => fn () => [],
             'update_site_option' => fn () => true,
         ]);
 

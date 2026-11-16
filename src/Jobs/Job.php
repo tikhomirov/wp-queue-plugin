@@ -140,14 +140,14 @@ abstract class Job implements JobInterface, ShouldQueue
     public function toArray(): array
     {
         return [
-            'id' => $this->id,
-            'class' => static::class,
-            'queue' => $this->queue,
-            'attempts' => $this->attempts,
+            'id'           => $this->id,
+            'class'        => static::class,
+            'queue'        => $this->queue,
+            'attempts'     => $this->attempts,
             'max_attempts' => $this->maxAttempts,
-            'timeout' => $this->timeout,
-            'delay' => $this->delay,
-            'created_at' => $this->createdAt,
+            'timeout'      => $this->timeout,
+            'delay'        => $this->delay,
+            'created_at'   => $this->createdAt,
         ];
     }
 
@@ -183,7 +183,7 @@ abstract class Job implements JobInterface, ShouldQueue
 
                 // Use class name prefix for private properties to avoid conflicts
                 if ($property->isPrivate() && $property->getDeclaringClass()->getName() !== self::class) {
-                    $key = $property->getDeclaringClass()->getName().'::'.$name;
+                    $key = $property->getDeclaringClass()->getName() . '::' . $name;
                 } else {
                     $key = $name;
                 }
@@ -208,7 +208,7 @@ abstract class Job implements JobInterface, ShouldQueue
             foreach ($ref->getProperties() as $property) {
                 $name = $property->getName();
                 if ($property->isPrivate() && $property->getDeclaringClass()->getName() !== self::class) {
-                    $key = $property->getDeclaringClass()->getName().'::'.$name;
+                    $key = $property->getDeclaringClass()->getName() . '::' . $name;
                 } else {
                     $key = $name;
                 }
@@ -230,12 +230,12 @@ abstract class Job implements JobInterface, ShouldQueue
                 $type = $property->getType();
                 if ($type instanceof \ReflectionNamedType && ! $type->allowsNull()) {
                     $default = match ($type->getName()) {
-                        'array' => [],
+                        'array'  => [],
                         'string' => '',
-                        'int' => 0,
-                        'float' => 0.0,
-                        'bool' => false,
-                        default => null,
+                        'int'    => 0,
+                        'float'  => 0.0,
+                        'bool'   => false,
+                        default  => null,
                     };
                     if ($default !== null) {
                         $property->setAccessible(true);

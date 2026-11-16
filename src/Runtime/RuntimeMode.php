@@ -23,7 +23,7 @@ final class RuntimeMode
     {
         return match (Runner::active()) {
             Runner::DAEMON => self::MODE_DAEMON,
-            default => self::MODE_CRON_LOOPBACK,
+            default        => self::MODE_CRON_LOOPBACK,
         };
     }
 

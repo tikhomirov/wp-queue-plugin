@@ -23,12 +23,12 @@ class LogStorage
         $table = $this->getTableName();
 
         $data = [
-            'job_id' => (string) $job->getId(),
-            'job_class' => $job::class,
-            'queue' => (string) $job->getQueue(),
-            'status' => $status,
-            'message' => $message,
-            'attempts' => (int) $job->getAttempts(),
+            'job_id'     => (string) $job->getId(),
+            'job_class'  => $job::class,
+            'queue'      => (string) $job->getQueue(),
+            'status'     => $status,
+            'message'    => $message,
+            'attempts'   => (int) $job->getAttempts(),
             'created_at' => gmdate('Y-m-d H:i:s'),
         ];
 
@@ -70,13 +70,13 @@ class LogStorage
 
         return array_map(static function (array $row): array {
             return [
-                'id' => (string) ($row['id'] ?? ''),
-                'job_id' => (string) ($row['job_id'] ?? ''),
+                'id'        => (string) ($row['id'] ?? ''),
+                'job_id'    => (string) ($row['job_id'] ?? ''),
                 'job_class' => (string) ($row['job_class'] ?? ''),
-                'queue' => (string) ($row['queue'] ?? ''),
-                'status' => (string) ($row['status'] ?? ''),
-                'message' => $row['message'] ?? null,
-                'attempts' => isset($row['attempts']) ? (int) $row['attempts'] : 0,
+                'queue'     => (string) ($row['queue'] ?? ''),
+                'status'    => (string) ($row['status'] ?? ''),
+                'message'   => $row['message'] ?? null,
+                'attempts'  => isset($row['attempts']) ? (int) $row['attempts'] : 0,
                 'timestamp' => isset($row['created_at']) ? strtotime((string) $row['created_at']) : time(),
             ];
         }, $rows);
@@ -97,7 +97,7 @@ class LogStorage
     /**
      * Get logs for a specific job class.
      *
-     * @param  class-string  $jobClass
+     * @param  class-string                                                                                                                                     $jobClass
      * @return array<int, array{id: string, job_id: string, job_class: string, queue: string, status: string, message: ?string, attempts: int, timestamp: int}>
      */
     public function forJob(string $jobClass): array
@@ -126,13 +126,13 @@ class LogStorage
 
         return array_map(static function (array $row): array {
             return [
-                'id' => (string) ($row['id'] ?? ''),
-                'job_id' => (string) ($row['job_id'] ?? ''),
+                'id'        => (string) ($row['id'] ?? ''),
+                'job_id'    => (string) ($row['job_id'] ?? ''),
                 'job_class' => (string) ($row['job_class'] ?? ''),
-                'queue' => (string) ($row['queue'] ?? ''),
-                'status' => (string) ($row['status'] ?? ''),
-                'message' => $row['message'] ?? null,
-                'attempts' => isset($row['attempts']) ? (int) $row['attempts'] : 0,
+                'queue'     => (string) ($row['queue'] ?? ''),
+                'status'    => (string) ($row['status'] ?? ''),
+                'message'   => $row['message'] ?? null,
+                'attempts'  => isset($row['attempts']) ? (int) $row['attempts'] : 0,
                 'timestamp' => isset($row['created_at']) ? strtotime((string) $row['created_at']) : time(),
             ];
         }, $rows);
@@ -159,13 +159,13 @@ class LogStorage
 
         return array_map(static function (array $row): array {
             return [
-                'id' => (string) ($row['id'] ?? ''),
-                'job_id' => (string) ($row['job_id'] ?? ''),
+                'id'        => (string) ($row['id'] ?? ''),
+                'job_id'    => (string) ($row['job_id'] ?? ''),
                 'job_class' => (string) ($row['job_class'] ?? ''),
-                'queue' => (string) ($row['queue'] ?? ''),
-                'status' => (string) ($row['status'] ?? ''),
-                'message' => $row['message'] ?? null,
-                'attempts' => isset($row['attempts']) ? (int) $row['attempts'] : 0,
+                'queue'     => (string) ($row['queue'] ?? ''),
+                'status'    => (string) ($row['status'] ?? ''),
+                'message'   => $row['message'] ?? null,
+                'attempts'  => isset($row['attempts']) ? (int) $row['attempts'] : 0,
                 'timestamp' => isset($row['created_at']) ? strtotime((string) $row['created_at']) : time(),
             ];
         }, $rows);
@@ -231,11 +231,11 @@ class LogStorage
         }
 
         $metrics = [
-            'total' => count($rows),
+            'total'     => count($rows),
             'completed' => 0,
-            'failed' => 0,
-            'by_queue' => [],
-            'by_job' => [],
+            'failed'    => 0,
+            'by_queue'  => [],
+            'by_job'    => [],
         ];
 
         foreach ($rows as $row) {
@@ -289,7 +289,7 @@ class LogStorage
     {
         global $wpdb;
 
-        return $wpdb->prefix.'queue_logs';
+        return $wpdb->prefix . 'queue_logs';
     }
 
     protected function isMissingTableError(?string $message): bool
@@ -298,7 +298,7 @@ class LogStorage
             return false;
         }
 
-        $message = strtolower($message);
+        $message = mb_strtolower($message);
 
         return str_contains($message, 'no such table')
             || str_contains($message, 'doesn\'t exist')

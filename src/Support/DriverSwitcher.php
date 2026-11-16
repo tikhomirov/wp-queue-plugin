@@ -95,8 +95,8 @@ final class DriverSwitcher
             Runner::reset();
 
             return [
-                'ok' => true,
-                'moved' => $moved,
+                'ok'      => true,
+                'moved'   => $moved,
                 'message' => sprintf(
                     /* translators: 1: driver, 2: number of jobs */
                     __('Storage driver switched to %1$s. Jobs moved: %2$d.', 'wp-queue'),

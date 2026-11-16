@@ -67,7 +67,7 @@ final class Options
     public static function transient(string $name): mixed
     {
         if (self::$memory !== null) {
-            return self::$memory['_transient_'.$name] ?? false;
+            return self::$memory['_transient_' . $name] ?? false;
         }
 
         return function_exists('get_transient') ? get_transient($name) : false;
@@ -76,7 +76,7 @@ final class Options
     public static function setTransient(string $name, mixed $value, int $ttl): void
     {
         if (self::$memory !== null) {
-            self::$memory['_transient_'.$name] = $value;
+            self::$memory['_transient_' . $name] = $value;
 
             return;
         }

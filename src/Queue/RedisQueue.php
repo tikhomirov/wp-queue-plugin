@@ -78,7 +78,7 @@ class RedisQueue implements InspectableQueue, QueueInterface, TransferableQueue
     protected array $config;
 
     /**
-     * @param  array<string, mixed>  $config  Optional config override
+     * @param array<string, mixed> $config Optional config override
      */
     public function __construct(array $config = [])
     {
@@ -89,20 +89,20 @@ class RedisQueue implements InspectableQueue, QueueInterface, TransferableQueue
     /**
      * Resolve configuration from WP constants and overrides.
      *
-     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>                                                                                                                                               $config
      * @return array{host: string, port: int, password: string|array|null, database: int, prefix: string, scheme: string, path: string|null, timeout: float, read_timeout: float}
      */
     protected function resolveConfig(array $config): array
     {
         return [
-            'host' => $config['host'] ?? (defined('WP_REDIS_HOST') ? WP_REDIS_HOST : '127.0.0.1'),
-            'port' => (int) ($config['port'] ?? (defined('WP_REDIS_PORT') ? WP_REDIS_PORT : 6379)),
-            'password' => $config['password'] ?? (defined('WP_REDIS_PASSWORD') ? WP_REDIS_PASSWORD : null),
-            'database' => (int) ($config['database'] ?? (defined('WP_REDIS_DATABASE') ? WP_REDIS_DATABASE : 0)),
-            'prefix' => $config['prefix'] ?? $this->resolvePrefix(),
-            'scheme' => $config['scheme'] ?? (defined('WP_REDIS_SCHEME') ? WP_REDIS_SCHEME : 'tcp'),
-            'path' => $config['path'] ?? (defined('WP_REDIS_PATH') ? WP_REDIS_PATH : null),
-            'timeout' => (float) ($config['timeout'] ?? (defined('WP_REDIS_TIMEOUT') ? WP_REDIS_TIMEOUT : 1)),
+            'host'         => $config['host'] ?? (defined('WP_REDIS_HOST') ? WP_REDIS_HOST : '127.0.0.1'),
+            'port'         => (int) ($config['port'] ?? (defined('WP_REDIS_PORT') ? WP_REDIS_PORT : 6379)),
+            'password'     => $config['password'] ?? (defined('WP_REDIS_PASSWORD') ? WP_REDIS_PASSWORD : null),
+            'database'     => (int) ($config['database'] ?? (defined('WP_REDIS_DATABASE') ? WP_REDIS_DATABASE : 0)),
+            'prefix'       => $config['prefix'] ?? $this->resolvePrefix(),
+            'scheme'       => $config['scheme'] ?? (defined('WP_REDIS_SCHEME') ? WP_REDIS_SCHEME : 'tcp'),
+            'path'         => $config['path'] ?? (defined('WP_REDIS_PATH') ? WP_REDIS_PATH : null),
+            'timeout'      => (float) ($config['timeout'] ?? (defined('WP_REDIS_TIMEOUT') ? WP_REDIS_TIMEOUT : 1)),
             'read_timeout' => (float) ($config['read_timeout'] ?? (defined('WP_REDIS_READ_TIMEOUT') ? WP_REDIS_READ_TIMEOUT : 1)),
         ];
     }
@@ -113,11 +113,11 @@ class RedisQueue implements InspectableQueue, QueueInterface, TransferableQueue
     protected function resolvePrefix(): string
     {
         if (defined('WP_REDIS_PREFIX')) {
-            return WP_REDIS_PREFIX.self::PREFIX;
+            return WP_REDIS_PREFIX . self::PREFIX;
         }
 
         if (defined('WP_CACHE_KEY_SALT')) {
-            return WP_CACHE_KEY_SALT.self::PREFIX;
+            return WP_CACHE_KEY_SALT . self::PREFIX;
         }
 
         return self::PREFIX;
@@ -174,15 +174,15 @@ class RedisQueue implements InspectableQueue, QueueInterface, TransferableQueue
     public function getConnectionInfo(): array
     {
         return [
-            'host' => $this->config['host'],
-            'port' => $this->config['port'],
-            'database' => $this->config['database'],
-            'prefix' => $this->config['prefix'],
-            'scheme' => $this->config['scheme'],
-            'connected' => $this->client?->isConnected() ?? false,
+            'host'        => $this->config['host'],
+            'port'        => $this->config['port'],
+            'database'    => $this->config['database'],
+            'prefix'      => $this->config['prefix'],
+            'scheme'      => $this->config['scheme'],
+            'connected'   => $this->client?->isConnected() ?? false,
             'client_type' => $this->client?->getClientType() ?? 'none',
-            'phpredis' => extension_loaded('redis') ? phpversion('redis') : 'not installed',
-            'predis' => RedisClientFactory::isPredisAvailable() ? 'available' : 'not installed',
+            'phpredis'    => extension_loaded('redis') ? phpversion('redis') : 'not installed',
+            'predis'      => RedisClientFactory::isPredisAvailable() ? 'available' : 'not installed',
         ];
     }
 
@@ -301,10 +301,10 @@ class RedisQueue implements InspectableQueue, QueueInterface, TransferableQueue
 
             $reservedAt = $raw[$i + 2];
             $jobs[(string) $raw[$i]] = [
-                'payload' => (string) base64_decode((string) ($data['payload'] ?? ''), true),
+                'payload'      => (string) base64_decode((string) ($data['payload'] ?? ''), true),
                 'available_at' => (int) ($data['available_at'] ?? 0),
-                'reserved_at' => ($reservedAt === false || $reservedAt === null || $reservedAt === '') ? null : (int) $reservedAt,
-                'attempts' => (int) ($data['attempts'] ?? 0),
+                'reserved_at'  => ($reservedAt === false || $reservedAt === null || $reservedAt === '') ? null : (int) $reservedAt,
+                'attempts'     => (int) ($data['attempts'] ?? 0),
             ];
         }
 
@@ -365,10 +365,10 @@ class RedisQueue implements InspectableQueue, QueueInterface, TransferableQueue
         $raw = is_array($raw) ? array_map('intval', $raw) : [0, 0, 0, 0];
 
         return [
-            'pending' => $raw[0] ?? 0,
-            'delayed' => $raw[1] ?? 0,
+            'pending'  => $raw[0] ?? 0,
+            'delayed'  => $raw[1] ?? 0,
             'reserved' => $raw[2] ?? 0,
-            'total' => $raw[3] ?? 0,
+            'total'    => $raw[3] ?? 0,
         ];
     }
 
@@ -392,10 +392,10 @@ class RedisQueue implements InspectableQueue, QueueInterface, TransferableQueue
     protected function keys(string $queue): array
     {
         return [
-            'q:'.$queue.':ready',
-            'q:'.$queue.':delayed',
-            'q:'.$queue.':reserved',
-            'q:'.$queue.':data',
+            'q:' . $queue . ':ready',
+            'q:' . $queue . ':delayed',
+            'q:' . $queue . ':reserved',
+            'q:' . $queue . ':data',
             'queues',
             'index',
         ];
@@ -413,10 +413,10 @@ class RedisQueue implements InspectableQueue, QueueInterface, TransferableQueue
         return (string) json_encode([
             'id' => $job->getId(),
             // Serialized objects contain NUL bytes and may hold non-UTF-8 data.
-            'payload' => base64_encode(serialize($job)),
-            'attempts' => $job->getAttempts(),
+            'payload'      => base64_encode(serialize($job)),
+            'attempts'     => $job->getAttempts(),
             'available_at' => $availableAt,
-            'created_at' => time(),
+            'created_at'   => time(),
         ]);
     }
 
@@ -458,12 +458,12 @@ class RedisQueue implements InspectableQueue, QueueInterface, TransferableQueue
 
         $legacy = [];
 
-        while (($item = $client->lPop('jobs:'.$queue)) !== null) {
+        while (($item = $client->lPop('jobs:' . $queue)) !== null) {
             $legacy[] = $item;
         }
 
-        foreach ($client->zRange('jobs:'.$queue.':delayed', 0, -1) as $item) {
-            if ($client->zRem('jobs:'.$queue.':delayed', $item) === 1) {
+        foreach ($client->zRange('jobs:' . $queue . ':delayed', 0, -1) as $item) {
+            if ($client->zRem('jobs:' . $queue . ':delayed', $item) === 1) {
                 $legacy[] = $item;
             }
         }
